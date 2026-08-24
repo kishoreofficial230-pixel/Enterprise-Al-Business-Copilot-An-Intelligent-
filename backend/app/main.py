@@ -12,22 +12,12 @@ from app.api.routers import (
     analytics,
 )
 
-from app.api.routers.ai import (
-    router as ai_router,
-)
-
-from app.api.routers.forecast import (
-    router as forecast_router,
-)
-
-from app.api.routers.alerts import (
-    router as alerts_router,
-)
+from app.api.routers.ai import router as ai_router
+from app.api.routers.forecast import router as forecast_router
+from app.api.routers.alerts import router as alerts_router
 
 
-Base.metadata.create_all(
-    bind=engine
-)
+Base.metadata.create_all(bind=engine)
 
 
 app = FastAPI(
@@ -38,6 +28,9 @@ app = FastAPI(
         "and Business Risk Detection Platform"
     ),
     version="1.0.0",
+    docs_url="/docs",
+    redoc_url="/redoc",
+    openapi_url="/openapi.json",
 )
 
 
@@ -56,41 +49,15 @@ app.add_middleware(
 )
 
 
-app.include_router(
-    users.router
-)
-
-app.include_router(
-    roles.router
-)
-
-app.include_router(
-    dashboard.router
-)
-
-app.include_router(
-    customers.router
-)
-
-app.include_router(
-    sales.router
-)
-
-app.include_router(
-    analytics.router
-)
-
-app.include_router(
-    ai_router
-)
-
-app.include_router(
-    forecast_router
-)
-
-app.include_router(
-    alerts_router
-)
+app.include_router(users.router)
+app.include_router(roles.router)
+app.include_router(dashboard.router)
+app.include_router(customers.router)
+app.include_router(sales.router)
+app.include_router(analytics.router)
+app.include_router(ai_router)
+app.include_router(forecast_router)
+app.include_router(alerts_router)
 
 
 @app.get("/")
@@ -99,7 +66,7 @@ def root():
         "message": "Enterprise AI Business Copilot API",
         "status": "running",
         "backend": "FastAPI",
-        "database": "MySQL",
+        "database": "TiDB Cloud",
         "modules": [
             "Authentication",
             "Dashboard",
