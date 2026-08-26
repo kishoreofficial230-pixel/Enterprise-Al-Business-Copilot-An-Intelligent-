@@ -717,13 +717,11 @@ function Login({
   ] =
     useState("");
 
-
   const [
     password,
     setPassword,
   ] =
     useState("");
-
 
   const [
     loading,
@@ -731,12 +729,146 @@ function Login({
   ] =
     useState(false);
 
-
   const [
     error,
     setError,
   ] =
     useState("");
+
+  const [
+    lampOn,
+    setLampOn,
+  ] =
+    useState(false);
+
+  const [
+    pulling,
+    setPulling,
+  ] =
+    useState(false);
+
+  const [
+    pullStartY,
+    setPullStartY,
+  ] =
+    useState(null);
+
+  const [
+    pullDistance,
+    setPullDistance,
+  ] =
+    useState(0);
+
+
+  const revealLogin = () => {
+
+    if (lampOn) {
+      return;
+    }
+
+    setPullDistance(82);
+
+    window.setTimeout(
+      () => {
+        setLampOn(true);
+
+        window.setTimeout(
+          () => {
+            setPullDistance(0);
+          },
+          260
+        );
+      },
+      120
+    );
+  };
+
+
+  const handlePullStart = (
+    event
+  ) => {
+
+    if (lampOn) {
+      return;
+    }
+
+    setPulling(true);
+
+    setPullStartY(
+      event.clientY
+    );
+
+    setPullDistance(0);
+
+    try {
+      event.currentTarget
+        .setPointerCapture(
+          event.pointerId
+        );
+    } catch {
+      // Pointer capture is optional.
+    }
+  };
+
+
+  const handlePullMove = (
+    event
+  ) => {
+
+    if (
+      !pulling ||
+      pullStartY === null ||
+      lampOn
+    ) {
+      return;
+    }
+
+    const distance =
+      Math.max(
+        0,
+        Math.min(
+          105,
+          event.clientY -
+            pullStartY
+        )
+      );
+
+    setPullDistance(
+      distance
+    );
+  };
+
+
+  const handlePullEnd = (
+    event
+  ) => {
+
+    if (!pulling) {
+      return;
+    }
+
+    try {
+      event.currentTarget
+        .releasePointerCapture(
+          event.pointerId
+        );
+    } catch {
+      // Pointer may already be released.
+    }
+
+    const shouldTurnOn =
+      pullDistance >= 52;
+
+    setPulling(false);
+
+    setPullStartY(null);
+
+    if (shouldTurnOn) {
+      revealLogin();
+    } else {
+      setPullDistance(0);
+    }
+  };
 
 
   const handleLogin =
@@ -749,7 +881,6 @@ function Login({
       setLoading(true);
 
       setError("");
-
 
       try {
 
@@ -773,12 +904,12 @@ function Login({
             }
           );
 
-
         const data =
           await response.json();
 
-
-        if (!response.ok) {
+        if (
+          !response.ok
+        ) {
 
           setError(
             data.detail ||
@@ -788,12 +919,10 @@ function Login({
           return;
         }
 
-
         localStorage.setItem(
           "access_token",
           data.access_token
         );
-
 
         onLogin();
 
@@ -816,113 +945,351 @@ function Login({
 
   return (
 
-    <div className="login-page">
+    <div
+      className={
+        lampOn
+          ? "lamp-login-page is-lit"
+          : "lamp-login-page"
+      }
+    >
 
-      <div className="login-card">
+      <div className="lamp-room-noise">
+      </div>
 
-        <div className="login-logo">
-          AI
+
+      <div className="lamp-stage">
+
+        <div
+          className={
+            lampOn
+              ? "lamp-light-beam is-visible"
+              : "lamp-light-beam"
+          }
+        >
         </div>
 
-        <h1>
-          Enterprise AI
-        </h1>
 
-        <h2>
-          Business Copilot
-        </h2>
-
-        <p className="login-subtitle">
-          AI-Powered Business Analytics,
-          Forecasting & Decision Support
-        </p>
-
-
-        <form
-          onSubmit={
-            handleLogin
+        <div
+          className={
+            lampOn
+              ? "hanging-lamp lamp-is-on"
+              : "hanging-lamp"
           }
         >
 
-          <label>
-            Email Address
-          </label>
+          <div className="lamp-main-wire">
+          </div>
 
-          <input
-            type="email"
-            value={email}
-            placeholder="Enter your email"
-            onChange={
-              (
-                event
-              ) =>
-                setEmail(
-                  event.target.value
-                )
+          <div className="lamp-cap">
+          </div>
+
+          <div className="lamp-shade">
+            <div className="lamp-shade-rim">
+            </div>
+          </div>
+
+          <div className="lamp-bulb">
+            <span>
+            </span>
+          </div>
+
+        </div>
+
+
+        <div
+          className={
+            pulling
+              ? "pull-cord-area is-pulling"
+              : "pull-cord-area"
+          }
+        >
+
+          <div
+            className="pull-cord-line"
+            style={{
+              height:
+                `${
+                  126 +
+                  pullDistance
+                }px`,
+            }}
+          >
+          </div>
+
+          <button
+            type="button"
+            className="pull-cord-handle"
+            style={{
+              transform:
+                `translateY(${pullDistance}px)`,
+            }}
+            onPointerDown={
+              handlePullStart
             }
-            required
-          />
-
-
-          <label>
-            Password
-          </label>
-
-          <input
-            type="password"
-            value={password}
-            placeholder="Enter your password"
-            onChange={
-              (
-                event
-              ) =>
-                setPassword(
-                  event.target.value
-                )
+            onPointerMove={
+              handlePullMove
             }
-            required
-          />
+            onPointerUp={
+              handlePullEnd
+            }
+            onPointerCancel={
+              handlePullEnd
+            }
+            onClick={() => {
+              if (
+                !lampOn &&
+                pullDistance < 10
+              ) {
+                revealLogin();
+              }
+            }}
+            aria-label="Pull down to switch on the lamp and show login"
+            aria-pressed={
+              lampOn
+            }
+          >
+            <span className="pull-knob-top">
+            </span>
 
+            <span className="pull-knob-body">
+            </span>
+          </button>
+
+        </div>
+
+
+        <div
+          className={
+            lampOn
+              ? "lamp-intro intro-dimmed"
+              : "lamp-intro"
+          }
+        >
+
+          <div className="intro-brand-mark">
+            AI
+          </div>
+
+          <span className="intro-eyebrow">
+            ENTERPRISE INTELLIGENCE
+          </span>
+
+          <h1>
+            Enterprise AI
+          </h1>
+
+          <h2>
+            Business Copilot
+          </h2>
+
+          <p>
+            Analytics, forecasting and
+            intelligent decision support.
+          </p>
 
           {
-            error &&
+            !lampOn &&
             (
-              <div className="error-message">
-                {error}
+              <div className="pull-instruction">
+
+                <span className="pull-arrow">
+                  ↓
+                </span>
+
+                <div>
+                  <strong>
+                    Pull the cord
+                  </strong>
+
+                  <small>
+                    to switch on your workspace
+                  </small>
+                </div>
+
               </div>
             )
           }
 
+        </div>
 
-          <button
-            type="submit"
-            className="login-button"
-            disabled={
-              loading
+      </div>
+
+
+      <section
+        className={
+          lampOn
+            ? "lamp-login-panel login-panel-visible"
+            : "lamp-login-panel"
+        }
+        aria-hidden={
+          !lampOn
+        }
+      >
+
+        <div className="lamp-login-card">
+
+          <div className="login-card-topline">
+          </div>
+
+          <div className="lamp-login-logo">
+            AI
+          </div>
+
+          <span className="login-kicker">
+            SECURE ACCESS
+          </span>
+
+          <h1>
+            Welcome Back
+          </h1>
+
+          <p className="lamp-login-subtitle">
+            Sign in to Enterprise AI
+            Business Copilot
+          </p>
+
+
+          <form
+            onSubmit={
+              handleLogin
             }
           >
 
+            <label
+              htmlFor="lamp-login-email"
+            >
+              Email Address
+            </label>
+
+            <div className="lamp-input-shell">
+
+              <span className="lamp-input-symbol">
+                @
+              </span>
+
+              <input
+                id="lamp-login-email"
+                type="email"
+                value={
+                  email
+                }
+                placeholder="Enter your email"
+                onChange={
+                  (
+                    event
+                  ) =>
+                    setEmail(
+                      event.target.value
+                    )
+                }
+                disabled={
+                  !lampOn ||
+                  loading
+                }
+                required
+              />
+
+            </div>
+
+
+            <label
+              htmlFor="lamp-login-password"
+            >
+              Password
+            </label>
+
+            <div className="lamp-input-shell">
+
+              <span className="lamp-input-symbol password-symbol">
+                •
+              </span>
+
+              <input
+                id="lamp-login-password"
+                type="password"
+                value={
+                  password
+                }
+                placeholder="Enter your password"
+                onChange={
+                  (
+                    event
+                  ) =>
+                    setPassword(
+                      event.target.value
+                    )
+                }
+                disabled={
+                  !lampOn ||
+                  loading
+                }
+                required
+              />
+
+            </div>
+
+
             {
-              loading
-                ? "Signing In..."
-                : "Sign In"
+              error &&
+              (
+                <div className="lamp-error-message">
+                  {error}
+                </div>
+              )
             }
 
-          </button>
 
-        </form>
+            <button
+              type="submit"
+              className="lamp-login-button"
+              disabled={
+                loading ||
+                !lampOn
+              }
+            >
+
+              {
+                loading
+                  ? (
+                    <>
+                      <span className="lamp-button-spinner">
+                      </span>
+
+                      Signing In...
+                    </>
+                  )
+                  : (
+                    <>
+                      Enter Dashboard
+
+                      <span className="lamp-login-arrow">
+                        →
+                      </span>
+                    </>
+                  )
+              }
+
+            </button>
+
+          </form>
 
 
-        <p className="login-footer">
-          Secure Enterprise AI Platform
-        </p>
+          <div className="login-security-note">
 
-      </div>
+            <span className="security-dot">
+            </span>
+
+            Protected Enterprise Session
+
+          </div>
+
+        </div>
+
+      </section>
 
     </div>
   );
 }
-
 
 /* =====================================================
    DASHBOARD COMPONENT

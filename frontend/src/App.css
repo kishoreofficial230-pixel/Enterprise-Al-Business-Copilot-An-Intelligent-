@@ -1808,3 +1808,1029 @@ tbody tr:hover {
     flex-direction: column;
   }
 }
+
+/* =====================================================
+   LAMP PULL LOGIN EXPERIENCE
+   ===================================================== */
+
+.lamp-login-page {
+  min-height: 100vh;
+  width: 100%;
+  position: relative;
+  overflow: hidden;
+  display: grid;
+  grid-template-columns: minmax(0, 1.15fr) minmax(420px, 0.85fr);
+  background:
+    radial-gradient(
+      circle at 28% 28%,
+      rgba(255, 255, 255, 0.025),
+      transparent 28%
+    ),
+    linear-gradient(
+      145deg,
+      #07090d 0%,
+      #0a0d13 45%,
+      #0d1017 100%
+    );
+  color: #f8fafc;
+  isolation: isolate;
+}
+
+.lamp-login-page::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  opacity: 0.55;
+  background-image:
+    linear-gradient(
+      rgba(255, 255, 255, 0.018) 1px,
+      transparent 1px
+    ),
+    linear-gradient(
+      90deg,
+      rgba(255, 255, 255, 0.018) 1px,
+      transparent 1px
+    );
+  background-size: 42px 42px;
+  mask-image:
+    linear-gradient(
+      to bottom,
+      rgba(0, 0, 0, 0.8),
+      transparent
+    );
+}
+
+.lamp-login-page::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 1;
+  background:
+    radial-gradient(
+      circle at center,
+      transparent 48%,
+      rgba(0, 0, 0, 0.48) 100%
+    );
+}
+
+.lamp-room-noise {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  opacity: 0.06;
+  background-image:
+    url("data:image/svg+xml,%3Csvg viewBox='0 0 180 180' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.8' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='.55'/%3E%3C/svg%3E");
+}
+
+.lamp-stage {
+  min-height: 100vh;
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 240px 70px 80px;
+  z-index: 2;
+}
+
+.hanging-lamp {
+  position: absolute;
+  top: 0;
+  left: 50%;
+  width: 190px;
+  height: 245px;
+  transform: translateX(-50%);
+  transform-origin: top center;
+  z-index: 8;
+  transition:
+    filter 0.45s ease,
+    transform 0.45s ease;
+}
+
+.lamp-main-wire {
+  position: absolute;
+  top: 0;
+  left: 50%;
+  width: 3px;
+  height: 118px;
+  transform: translateX(-50%);
+  border-radius: 4px;
+  background:
+    linear-gradient(
+      to right,
+      #181b21,
+      #4c515b,
+      #171a20
+    );
+}
+
+.lamp-cap {
+  position: absolute;
+  top: 111px;
+  left: 50%;
+  width: 30px;
+  height: 31px;
+  transform: translateX(-50%);
+  border-radius: 9px 9px 3px 3px;
+  background:
+    linear-gradient(
+      135deg,
+      #292d35,
+      #0d0f14
+    );
+  border:
+    1px solid rgba(255, 255, 255, 0.08);
+  box-shadow:
+    0 8px 20px rgba(0, 0, 0, 0.45);
+}
+
+.lamp-shade {
+  position: absolute;
+  top: 132px;
+  left: 50%;
+  width: 165px;
+  height: 78px;
+  transform: translateX(-50%);
+  clip-path:
+    polygon(
+      31% 0,
+      69% 0,
+      100% 100%,
+      0 100%
+    );
+  background:
+    linear-gradient(
+      120deg,
+      #252932 0%,
+      #11141a 54%,
+      #30343d 100%
+    );
+  border-bottom:
+    3px solid #353a44;
+  filter:
+    drop-shadow(
+      0 12px 12px rgba(0, 0, 0, 0.46)
+    );
+  z-index: 4;
+}
+
+.lamp-shade::after {
+  content: "";
+  position: absolute;
+  left: 14%;
+  right: 14%;
+  bottom: 6px;
+  height: 18px;
+  border-radius: 50%;
+  background:
+    rgba(0, 0, 0, 0.55);
+}
+
+.lamp-shade-rim {
+  position: absolute;
+  left: 7px;
+  right: 7px;
+  bottom: 0;
+  height: 6px;
+  border-radius: 50%;
+  background:
+    linear-gradient(
+      90deg,
+      #171a20,
+      #4f5560,
+      #171a20
+    );
+}
+
+.lamp-bulb {
+  position: absolute;
+  top: 180px;
+  left: 50%;
+  width: 45px;
+  height: 53px;
+  transform: translateX(-50%);
+  border-radius: 48% 48% 50% 50%;
+  background:
+    linear-gradient(
+      145deg,
+      #302f2a,
+      #151716
+    );
+  border:
+    1px solid rgba(255, 255, 255, 0.06);
+  z-index: 5;
+  transition:
+    background 0.35s ease,
+    box-shadow 0.45s ease,
+    border-color 0.35s ease;
+}
+
+.lamp-bulb::before {
+  content: "";
+  position: absolute;
+  top: -8px;
+  left: 9px;
+  right: 9px;
+  height: 12px;
+  border-radius: 3px 3px 0 0;
+  background:
+    repeating-linear-gradient(
+      to bottom,
+      #41454b 0 2px,
+      #1c1f23 2px 4px
+    );
+}
+
+.lamp-bulb span {
+  position: absolute;
+  width: 17px;
+  height: 22px;
+  left: 50%;
+  top: 14px;
+  transform: translateX(-50%);
+  border:
+    1px solid rgba(255, 255, 255, 0.12);
+  border-top: 0;
+  border-radius: 0 0 9px 9px;
+}
+
+.lamp-is-on {
+  filter:
+    drop-shadow(
+      0 20px 34px rgba(255, 197, 94, 0.24)
+    );
+  animation:
+    lampTinySwing 1.8s ease-in-out 1;
+}
+
+.lamp-is-on .lamp-bulb {
+  background:
+    radial-gradient(
+      circle at 48% 37%,
+      #fff9d3 0%,
+      #ffe8a1 30%,
+      #ffc85f 72%,
+      #f2a63f 100%
+    );
+  border-color:
+    rgba(255, 240, 190, 0.85);
+  box-shadow:
+    0 0 14px rgba(255, 220, 139, 0.95),
+    0 0 42px rgba(255, 184, 74, 0.78),
+    0 0 90px rgba(255, 169, 47, 0.42);
+}
+
+.lamp-is-on .lamp-bulb span {
+  border-color:
+    rgba(115, 72, 18, 0.44);
+}
+
+@keyframes lampTinySwing {
+  0% {
+    transform:
+      translateX(-50%)
+      rotate(0deg);
+  }
+
+  23% {
+    transform:
+      translateX(-50%)
+      rotate(2.4deg);
+  }
+
+  48% {
+    transform:
+      translateX(-50%)
+      rotate(-1.8deg);
+  }
+
+  72% {
+    transform:
+      translateX(-50%)
+      rotate(0.9deg);
+  }
+
+  100% {
+    transform:
+      translateX(-50%)
+      rotate(0deg);
+  }
+}
+
+.lamp-light-beam {
+  position: absolute;
+  top: 194px;
+  left: 50%;
+  width: min(740px, 92%);
+  height: 620px;
+  transform:
+    translateX(-50%)
+    scaleY(0.88);
+  transform-origin: top center;
+  clip-path:
+    polygon(
+      43% 0,
+      57% 0,
+      100% 100%,
+      0 100%
+    );
+  opacity: 0;
+  pointer-events: none;
+  z-index: 1;
+  background:
+    linear-gradient(
+      to bottom,
+      rgba(255, 220, 147, 0.32) 0%,
+      rgba(255, 198, 96, 0.14) 39%,
+      rgba(255, 174, 61, 0.04) 76%,
+      transparent 100%
+    );
+  filter:
+    blur(5px);
+  transition:
+    opacity 0.7s ease,
+    transform 0.7s ease;
+}
+
+.lamp-light-beam::after {
+  content: "";
+  position: absolute;
+  left: 7%;
+  right: 7%;
+  bottom: 12px;
+  height: 190px;
+  border-radius: 50%;
+  background:
+    radial-gradient(
+      ellipse,
+      rgba(255, 190, 88, 0.18),
+      transparent 68%
+    );
+  filter:
+    blur(22px);
+}
+
+.lamp-light-beam.is-visible {
+  opacity: 1;
+  transform:
+    translateX(-50%)
+    scaleY(1);
+}
+
+.pull-cord-area {
+  position: absolute;
+  top: 158px;
+  left:
+    calc(50% + 120px);
+  width: 74px;
+  height: 280px;
+  z-index: 12;
+}
+
+.pull-cord-line {
+  position: absolute;
+  top: 0;
+  left: 50%;
+  width: 2px;
+  transform: translateX(-50%);
+  border-radius: 2px;
+  background:
+    linear-gradient(
+      to right,
+      #6f6557,
+      #c7b89d,
+      #5e564b
+    );
+  transition:
+    height 0.08s linear;
+}
+
+.pull-cord-handle {
+  position: absolute;
+  top: 118px;
+  left: 50%;
+  width: 46px;
+  height: 74px;
+  margin-left: -23px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+  z-index: 3;
+  transition:
+    filter 0.2s ease;
+}
+
+.pull-cord-handle:hover {
+  filter:
+    brightness(1.22)
+    drop-shadow(
+      0 5px 7px rgba(0, 0, 0, 0.45)
+    );
+}
+
+.pull-cord-area.is-pulling
+.pull-cord-handle {
+  cursor: grabbing;
+}
+
+.pull-knob-top {
+  position: absolute;
+  top: 4px;
+  left: 50%;
+  width: 13px;
+  height: 18px;
+  transform:
+    translateX(-50%);
+  border-radius: 6px 6px 3px 3px;
+  background:
+    linear-gradient(
+      90deg,
+      #594738,
+      #b19073,
+      #4c3b30
+    );
+}
+
+.pull-knob-body {
+  position: absolute;
+  top: 18px;
+  left: 50%;
+  width: 30px;
+  height: 45px;
+  transform:
+    translateX(-50%);
+  border-radius: 48% 48% 43% 43%;
+  background:
+    radial-gradient(
+      circle at 35% 24%,
+      #bb997b,
+      #6d5340 56%,
+      #3e3028 100%
+    );
+  border:
+    1px solid rgba(255, 255, 255, 0.1);
+  box-shadow:
+    0 7px 15px rgba(0, 0, 0, 0.46);
+}
+
+.lamp-intro {
+  width: min(630px, 94%);
+  position: relative;
+  z-index: 5;
+  text-align: center;
+  margin-top: 70px;
+  transition:
+    opacity 0.55s ease,
+    transform 0.55s ease,
+    filter 0.55s ease;
+}
+
+.intro-dimmed {
+  opacity: 0.66;
+  transform:
+    translateY(8px)
+    scale(0.985);
+}
+
+.intro-brand-mark {
+  width: 68px;
+  height: 68px;
+  margin: 0 auto 24px;
+  display: grid;
+  place-items: center;
+  border-radius: 21px;
+  font-size: 21px;
+  font-weight: 800;
+  color: #e9edf5;
+  background:
+    linear-gradient(
+      145deg,
+      rgba(255, 255, 255, 0.1),
+      rgba(255, 255, 255, 0.02)
+    );
+  border:
+    1px solid rgba(255, 255, 255, 0.12);
+  box-shadow:
+    0 15px 35px rgba(0, 0, 0, 0.28);
+}
+
+.is-lit .intro-brand-mark {
+  color: #ffe5ae;
+  border-color:
+    rgba(255, 205, 121, 0.35);
+  box-shadow:
+    0 0 34px rgba(255, 186, 74, 0.16);
+}
+
+.intro-eyebrow {
+  display: block;
+  margin-bottom: 13px;
+  color: #8c96a7;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.24em;
+}
+
+.lamp-intro h1 {
+  margin: 0;
+  color: #f8fafc;
+  font-size:
+    clamp(
+      46px,
+      6vw,
+      82px
+    );
+  line-height: 0.96;
+  letter-spacing: -0.055em;
+  font-weight: 800;
+}
+
+.lamp-intro h2 {
+  margin: 13px 0 0;
+  color: #aeb7c7;
+  font-size:
+    clamp(
+      22px,
+      2.6vw,
+      34px
+    );
+  font-weight: 500;
+}
+
+.lamp-intro > p {
+  max-width: 500px;
+  margin: 24px auto 0;
+  color: #727d8e;
+  font-size: 15px;
+  line-height: 1.75;
+}
+
+.pull-instruction {
+  width: fit-content;
+  margin: 42px auto 0;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  color: #c8d0dc;
+  text-align: left;
+  animation:
+    pullHintFloat 1.7s ease-in-out infinite;
+}
+
+.pull-arrow {
+  width: 42px;
+  height: 42px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  color: #d8c2a1;
+  font-size: 23px;
+  border:
+    1px solid rgba(216, 194, 161, 0.22);
+  background:
+    rgba(255, 255, 255, 0.025);
+}
+
+.pull-instruction strong {
+  display: block;
+  margin-bottom: 3px;
+  color: #d9dee7;
+  font-size: 13px;
+}
+
+.pull-instruction small {
+  display: block;
+  color: #687384;
+  font-size: 11px;
+}
+
+@keyframes pullHintFloat {
+  0%,
+  100% {
+    transform:
+      translateY(0);
+  }
+
+  50% {
+    transform:
+      translateY(7px);
+  }
+}
+
+.lamp-login-panel {
+  min-height: 100vh;
+  position: relative;
+  z-index: 4;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 46px 7vw 46px 40px;
+  opacity: 0;
+  transform:
+    translateX(55px);
+  pointer-events: none;
+  transition:
+    opacity 0.7s ease 0.15s,
+    transform 0.72s ease 0.12s;
+}
+
+.login-panel-visible {
+  opacity: 1;
+  transform:
+    translateX(0);
+  pointer-events: auto;
+}
+
+.lamp-login-card {
+  width: 100%;
+  max-width: 455px;
+  position: relative;
+  overflow: hidden;
+  padding: 44px 42px 32px;
+  border-radius: 28px;
+  color: #e9edf5;
+  background:
+    linear-gradient(
+      145deg,
+      rgba(24, 27, 33, 0.94),
+      rgba(12, 15, 20, 0.965)
+    );
+  border:
+    1px solid rgba(255, 213, 145, 0.14);
+  box-shadow:
+    0 35px 90px rgba(0, 0, 0, 0.52),
+    0 0 90px rgba(255, 184, 73, 0.055);
+  backdrop-filter:
+    blur(20px);
+  -webkit-backdrop-filter:
+    blur(20px);
+}
+
+.lamp-login-card::before {
+  content: "";
+  position: absolute;
+  width: 260px;
+  height: 260px;
+  top: -170px;
+  right: -90px;
+  border-radius: 50%;
+  background:
+    rgba(255, 185, 73, 0.12);
+  filter:
+    blur(22px);
+  pointer-events: none;
+}
+
+.login-card-topline {
+  position: absolute;
+  top: 0;
+  left: 18%;
+  right: 18%;
+  height: 1px;
+  background:
+    linear-gradient(
+      90deg,
+      transparent,
+      rgba(255, 214, 149, 0.78),
+      transparent
+    );
+}
+
+.lamp-login-logo {
+  width: 54px;
+  height: 54px;
+  display: grid;
+  place-items: center;
+  margin-bottom: 24px;
+  border-radius: 17px;
+  color: #211b12;
+  font-weight: 900;
+  font-size: 17px;
+  background:
+    linear-gradient(
+      145deg,
+      #ffe3a6,
+      #ffbd58
+    );
+  box-shadow:
+    0 10px 34px rgba(255, 177, 54, 0.2);
+}
+
+.login-kicker {
+  display: block;
+  margin-bottom: 8px;
+  color: #caa66a;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.22em;
+}
+
+.lamp-login-card h1 {
+  margin: 0;
+  color: #f7f8fa;
+  font-size: 32px;
+  line-height: 1.15;
+}
+
+.lamp-login-subtitle {
+  margin: 10px 0 31px;
+  color: #7d8796;
+  font-size: 13px;
+  line-height: 1.65;
+}
+
+.lamp-login-card form {
+  display: flex;
+  flex-direction: column;
+}
+
+.lamp-login-card label {
+  margin: 0 0 8px;
+  color: #b7bfcb;
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.lamp-input-shell {
+  position: relative;
+  margin-bottom: 20px;
+}
+
+.lamp-input-symbol {
+  position: absolute;
+  top: 50%;
+  left: 16px;
+  transform: translateY(-50%);
+  z-index: 2;
+  color: #7d8795;
+  font-size: 14px;
+  font-weight: 700;
+  pointer-events: none;
+}
+
+.password-symbol {
+  width: 15px;
+  height: 15px;
+  display: grid;
+  place-items: center;
+  border:
+    1px solid #697281;
+  border-radius: 50%;
+  font-size: 13px;
+}
+
+.lamp-input-shell input {
+  width: 100%;
+  min-height: 52px;
+  margin: 0;
+  padding:
+    0 16px 0 45px;
+  border-radius: 14px;
+  outline: none;
+  color: #f1f4f8;
+  font-size: 14px;
+  background:
+    rgba(255, 255, 255, 0.035);
+  border:
+    1px solid rgba(255, 255, 255, 0.085);
+  transition:
+    border-color 0.2s ease,
+    background 0.2s ease,
+    box-shadow 0.2s ease;
+}
+
+.lamp-input-shell input::placeholder {
+  color: #555f6d;
+}
+
+.lamp-input-shell input:focus {
+  border-color:
+    rgba(255, 194, 95, 0.55);
+  background:
+    rgba(255, 255, 255, 0.052);
+  box-shadow:
+    0 0 0 4px rgba(255, 181, 62, 0.075);
+}
+
+.lamp-error-message {
+  margin:
+    -3px 0 18px;
+  padding:
+    12px 14px;
+  border-radius: 12px;
+  color: #ffb8b8;
+  font-size: 12px;
+  background:
+    rgba(229, 72, 72, 0.1);
+  border:
+    1px solid rgba(255, 94, 94, 0.17);
+}
+
+.lamp-login-button {
+  min-height: 53px;
+  margin-top: 5px;
+  padding:
+    0 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  border: 0;
+  border-radius: 14px;
+  cursor: pointer;
+  color: #241a0e;
+  font-size: 14px;
+  font-weight: 800;
+  background:
+    linear-gradient(
+      135deg,
+      #ffe3a2,
+      #ffb84b
+    );
+  box-shadow:
+    0 15px 32px rgba(255, 177, 52, 0.17);
+  transition:
+    transform 0.2s ease,
+    box-shadow 0.2s ease,
+    filter 0.2s ease;
+}
+
+.lamp-login-button:hover:not(:disabled) {
+  transform:
+    translateY(-2px);
+  filter:
+    brightness(1.04);
+  box-shadow:
+    0 18px 38px rgba(255, 177, 52, 0.24);
+}
+
+.lamp-login-button:disabled {
+  opacity: 0.62;
+  cursor: not-allowed;
+}
+
+.lamp-login-arrow {
+  font-size: 19px;
+}
+
+.lamp-button-spinner {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  border:
+    2px solid rgba(34, 27, 17, 0.25);
+  border-top-color:
+    rgba(34, 27, 17, 0.9);
+  animation:
+    lampButtonSpin 0.7s linear infinite;
+}
+
+@keyframes lampButtonSpin {
+  to {
+    transform:
+      rotate(360deg);
+  }
+}
+
+.login-security-note {
+  margin-top: 25px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  color: #5f6976;
+  font-size: 10px;
+}
+
+.security-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #7da76d;
+  box-shadow:
+    0 0 10px rgba(125, 167, 109, 0.45);
+}
+
+@media (max-width: 980px) {
+  .lamp-login-page {
+    grid-template-columns: 1fr;
+    overflow-y: auto;
+  }
+
+  .lamp-stage {
+    min-height: 510px;
+    padding:
+      220px 28px 55px;
+  }
+
+  .lamp-intro {
+    margin-top: 30px;
+  }
+
+  .lamp-login-panel {
+    min-height: auto;
+    padding:
+      15px 24px 55px;
+    transform:
+      translateY(38px);
+  }
+
+  .login-panel-visible {
+    transform:
+      translateY(0);
+  }
+
+  .lamp-light-beam {
+    height: 500px;
+  }
+}
+
+@media (max-width: 560px) {
+  .lamp-stage {
+    min-height: 500px;
+    padding:
+      210px 18px 38px;
+  }
+
+  .hanging-lamp {
+    left: 44%;
+    transform:
+      translateX(-50%)
+      scale(0.9);
+  }
+
+  .lamp-is-on {
+    animation: none;
+  }
+
+  .pull-cord-area {
+    left:
+      calc(44% + 100px);
+    transform:
+      scale(0.9);
+    transform-origin:
+      top center;
+  }
+
+  .lamp-light-beam {
+    left: 44%;
+    width: 115%;
+  }
+
+  .lamp-intro {
+    margin-top: 18px;
+  }
+
+  .lamp-intro h1 {
+    font-size: 43px;
+  }
+
+  .lamp-intro h2 {
+    font-size: 22px;
+  }
+
+  .lamp-intro > p {
+    font-size: 13px;
+  }
+
+  .pull-instruction {
+    margin-top: 29px;
+  }
+
+  .lamp-login-panel {
+    padding:
+      10px 15px 35px;
+  }
+
+  .lamp-login-card {
+    padding:
+      34px 24px 27px;
+    border-radius: 22px;
+  }
+}
+
+@media (
+  prefers-reduced-motion:
+    reduce
+) {
+  .hanging-lamp,
+  .lamp-light-beam,
+  .lamp-intro,
+  .lamp-login-panel,
+  .pull-instruction,
+  .lamp-login-button {
+    animation: none !important;
+    transition-duration:
+      0.01ms !important;
+  }
+}
+
+/* =====================================================
+   END LAMP PULL LOGIN EXPERIENCE
+   ===================================================== */
