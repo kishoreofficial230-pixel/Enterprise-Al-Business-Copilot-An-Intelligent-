@@ -46,3 +46,12 @@ htmlcov/
 
 # Old frontend backup
 frontend_old/
+# Local helper and backup files
+LampLogin_component.jsx.txt
+Lamp_Pull_Login_Upgrade/
+README.txt
+apply_lamp_login.py
+frontend/src/App.css.before-lamp-login.bak
+frontend/src/App.jsx.before-lamp-login.bak
+frontend/src/App.jsx.before-premium-dashboard.bak
+lamp_login_styles.css.txt
