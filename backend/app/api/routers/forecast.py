@@ -26,6 +26,16 @@ FORECAST_DAYS = 7
 
 MINIMUM_ML_DAYS = 5
 
+RECENT_WINDOW = 7
+
+ML_WEIGHT = 0.60
+
+BASELINE_WEIGHT = 0.40
+
+MIN_BASELINE_RATIO = 0.35
+
+MAX_BASELINE_RATIO = 2.50
+
 
 # =====================================================
 # HELPER FUNCTIONS
@@ -38,19 +48,19 @@ def to_date(value):
 
     if isinstance(
         value,
-        datetime
+        datetime,
     ):
         return value.date()
 
     if isinstance(
         value,
-        date
+        date,
     ):
         return value
 
     return datetime.strptime(
         str(value),
-        "%Y-%m-%d"
+        "%Y-%m-%d",
     ).date()
 
 
@@ -64,7 +74,7 @@ def safe_float(value):
 
     except (
         TypeError,
-        ValueError
+        ValueError,
     ):
 
         return 0.0
@@ -80,14 +90,14 @@ def safe_int(value):
 
     except (
         TypeError,
-        ValueError
+        ValueError,
     ):
 
         return 0
 
 
 def get_model_quality(
-    r2_score
+    r2_score,
 ):
 
     if r2_score is None:
@@ -119,26 +129,313 @@ def get_model_quality(
     return "Very Weak"
 
 
+def get_confidence_label(
+    actual_sales_days,
+    r2_score,
+):
+
+    if (
+        actual_sales_days <
+        MINIMUM_ML_DAYS
+    ):
+
+        return "Low"
+
+    if r2_score is None:
+
+        return "Low"
+
+    if (
+        actual_sales_days >= 14
+        and
+        r2_score >= 0.70
+    ):
+
+        return "High"
+
+    if (
+        actual_sales_days >= 7
+        and
+        r2_score >= 0.40
+    ):
+
+        return "Moderate"
+
+    return "Low"
+
+
+def weighted_recent_average(
+    values,
+    window=RECENT_WINDOW,
+):
+
+    cleaned_values = []
+
+    for value in values:
+
+        number = safe_float(
+            value
+        )
+
+        if number >= 0:
+
+            cleaned_values.append(
+                number
+            )
+
+    if not cleaned_values:
+
+        return 0.0
+
+    recent_values = (
+        cleaned_values[
+            -window:
+        ]
+    )
+
+    weights = list(
+        range(
+            1,
+            len(
+                recent_values
+            ) + 1,
+        )
+    )
+
+    total_weight = sum(
+        weights
+    )
+
+    if total_weight <= 0:
+
+        return (
+            sum(
+                recent_values
+            )
+            /
+            len(
+                recent_values
+            )
+        )
+
+    weighted_total = 0.0
+
+    for (
+        value,
+        weight,
+    ) in zip(
+        recent_values,
+        weights,
+    ):
+
+        weighted_total += (
+            value *
+            weight
+        )
+
+    return (
+        weighted_total /
+        total_weight
+    )
+
+
+def calculate_mae(
+    actual_values,
+    predicted_values,
+):
+
+    if (
+        not actual_values
+        or
+        not predicted_values
+    ):
+
+        return None
+
+    length = min(
+        len(
+            actual_values
+        ),
+        len(
+            predicted_values
+        ),
+    )
+
+    if length <= 0:
+
+        return None
+
+    total_error = 0.0
+
+    for index in range(
+        length
+    ):
+
+        total_error += abs(
+            safe_float(
+                actual_values[
+                    index
+                ]
+            )
+            -
+            safe_float(
+                predicted_values[
+                    index
+                ]
+            )
+        )
+
+    return (
+        total_error /
+        length
+    )
+
+
+def no_data_response(
+    message,
+    current_user,
+):
+
+    return {
+
+        "message":
+            message,
+
+        "historical":
+            [],
+
+        "forecast":
+            [],
+
+        "summary": {
+
+            "historical_revenue":
+                0,
+
+            "historical_days":
+                0,
+
+            "calendar_training_days":
+                0,
+
+            "average_daily_revenue":
+                0,
+
+            "average_sales_day_revenue":
+                0,
+
+            "recent_weighted_daily_revenue":
+                0,
+
+            "forecast_7_days":
+                0,
+
+            "predicted_average_daily_revenue":
+                0,
+
+            "average_daily_orders":
+                0,
+
+            "average_daily_quantity":
+                0,
+
+            "average_order_value":
+                0,
+
+            "average_units_per_order":
+                0,
+
+            "predicted_total_orders":
+                0,
+
+            "predicted_total_quantity":
+                0,
+        },
+
+        "model_info": {
+
+            "method":
+                "No Data",
+
+            "ml_ready":
+                False,
+
+            "training_days":
+                0,
+
+            "minimum_ml_days":
+                MINIMUM_ML_DAYS,
+
+            "revenue_r2_score":
+                None,
+
+            "revenue_mae":
+                None,
+
+            "model_quality":
+                "Not Available",
+
+            "confidence":
+                "Low",
+
+            "revenue_trend_per_day":
+                0,
+
+            "trend_direction":
+                "No Data",
+
+            "forecast_start_date":
+                None,
+
+            "forecast_end_date":
+                None,
+
+            "forecast_days":
+                FORECAST_DAYS,
+
+            "hybrid_forecast":
+                False,
+
+            "ml_weight":
+                0,
+
+            "baseline_weight":
+                1,
+        },
+
+        "insight":
+            message,
+
+        "user_id":
+            current_user.get(
+                "sub"
+            ),
+    }
+
+
 # =====================================================
 # SALES FORECAST API
 # =====================================================
 
 @router.get("/sales")
 def sales_forecast(
+
     db: Session = Depends(
         get_db
     ),
+
     current_user: dict = Depends(
         get_current_user
     ),
 ):
 
 
-    # =====================================================
-    # FETCH DAILY SALES FROM MYSQL
-    # =====================================================
+    # =================================================
+    # FETCH ACTUAL DAILY SALES
+    # =================================================
 
     daily_sales_query = (
+
         db.query(
 
             func.date(
@@ -165,116 +462,50 @@ def sales_forecast(
                 "orders"
             ),
         )
+
         .filter(
             Sale.sale_date.isnot(
                 None
             )
         )
+
         .group_by(
             func.date(
                 Sale.sale_date
             )
         )
+
         .order_by(
             func.date(
                 Sale.sale_date
             )
         )
+
         .all()
     )
 
 
-    # =====================================================
+    # =================================================
     # NO SALES DATA
-    # =====================================================
+    # =================================================
 
     if not daily_sales_query:
 
-        return {
+        return no_data_response(
 
-            "message":
-                "No sales data available",
+            "No sales data available. "
+            "Add dated sales records "
+            "to generate a forecast.",
 
-            "historical": [],
-
-            "forecast": [],
-
-            "summary": {
-
-                "historical_revenue":
-                    0,
-
-                "historical_days":
-                    0,
-
-                "average_daily_revenue":
-                    0,
-
-                "forecast_7_days":
-                    0,
-
-                "predicted_average_daily_revenue":
-                    0,
-
-                "average_daily_orders":
-                    0,
-
-                "average_daily_quantity":
-                    0,
-
-                "average_order_value":
-                    0,
-
-                "average_units_per_order":
-                    0,
-            },
-
-            "model_info": {
-
-                "method":
-                    "No Data",
-
-                "ml_ready":
-                    False,
-
-                "training_days":
-                    0,
-
-                "minimum_ml_days":
-                    MINIMUM_ML_DAYS,
-
-                "revenue_r2_score":
-                    None,
-
-                "model_quality":
-                    "Not Available",
-
-                "revenue_trend_per_day":
-                    0,
-
-                "trend_direction":
-                    "No Data",
-
-                "forecast_start_date":
-                    None,
-            },
-
-            "insight":
-                "More sales data is required "
-                "to generate a forecast.",
-
-            "user_id":
-                current_user.get(
-                    "sub"
-                ),
-        }
+            current_user,
+        )
 
 
-    # =====================================================
-    # CONVERT MYSQL RESULT TO DICTIONARY
-    # =====================================================
+    # =================================================
+    # NORMALIZE DATABASE DATA
+    # =================================================
 
-    raw_daily_data = {}
+    actual_daily_data = []
 
 
     for row in daily_sales_query:
@@ -289,198 +520,122 @@ def sales_forecast(
             continue
 
 
-        raw_daily_data[
-            sale_day
-        ] = {
-
-            "revenue":
-                safe_float(
-                    row.revenue
-                ),
-
-            "orders":
-                safe_int(
-                    row.orders
-                ),
-
-            "quantity":
-                safe_int(
-                    row.quantity
-                ),
-        }
-
-
-    # =====================================================
-    # CHECK VALID DATA
-    # =====================================================
-
-    if not raw_daily_data:
-
-        return {
-
-            "message":
-                "No valid dated sales records found",
-
-            "historical": [],
-
-            "forecast": [],
-
-            "summary": {
-
-                "historical_revenue":
-                    0,
-
-                "historical_days":
-                    0,
-
-                "average_daily_revenue":
-                    0,
-
-                "forecast_7_days":
-                    0,
-
-                "predicted_average_daily_revenue":
-                    0,
-
-                "average_daily_orders":
-                    0,
-
-                "average_daily_quantity":
-                    0,
-
-                "average_order_value":
-                    0,
-
-                "average_units_per_order":
-                    0,
-            },
-
-            "model_info": {
-
-                "method":
-                    "No Data",
-
-                "ml_ready":
-                    False,
-
-                "training_days":
-                    0,
-
-                "minimum_ml_days":
-                    MINIMUM_ML_DAYS,
-
-                "revenue_r2_score":
-                    None,
-
-                "model_quality":
-                    "Not Available",
-
-                "revenue_trend_per_day":
-                    0,
-
-                "trend_direction":
-                    "No Data",
-
-                "forecast_start_date":
-                    None,
-            },
-
-            "insight":
-                "No valid dated sales "
-                "records were found.",
-
-            "user_id":
-                current_user.get(
-                    "sub"
-                ),
-        }
-
-
-    # =====================================================
-    # FIRST AND LAST SALES DATE
-    # =====================================================
-
-    first_day = min(
-        raw_daily_data.keys()
-    )
-
-
-    last_day = max(
-        raw_daily_data.keys()
-    )
-
-
-    # =====================================================
-    # BUILD CONTINUOUS DAILY HISTORY
-    # =====================================================
-
-    daily_data = []
-
-
-    current_day = first_day
-
-
-    while (
-        current_day <=
-        last_day
-    ):
-
-        values = raw_daily_data.get(
-            current_day,
-            {
-                "revenue":
-                    0.0,
-
-                "orders":
-                    0,
-
-                "quantity":
-                    0,
-            }
-        )
-
-
-        daily_data.append({
+        actual_daily_data.append({
 
             "date":
-                current_day,
+                sale_day,
 
             "revenue":
-                safe_float(
-                    values[
-                        "revenue"
-                    ]
+                max(
+                    safe_float(
+                        row.revenue
+                    ),
+                    0.0,
                 ),
 
             "orders":
-                safe_int(
-                    values[
-                        "orders"
-                    ]
+                max(
+                    safe_int(
+                        row.orders
+                    ),
+                    0,
                 ),
 
             "quantity":
-                safe_int(
-                    values[
-                        "quantity"
-                    ]
+                max(
+                    safe_int(
+                        row.quantity
+                    ),
+                    0,
                 ),
         })
 
 
-        current_day += timedelta(
-            days=1
+    # =================================================
+    # INVALID DATED SALES DATA
+    # =================================================
+
+    if not actual_daily_data:
+
+        return no_data_response(
+
+            "No valid dated sales "
+            "records were found.",
+
+            current_user,
         )
 
 
-    # =====================================================
+    # =================================================
+    # FIRST / LAST SALES DATE
+    # =================================================
+
+    first_day = (
+        actual_daily_data[
+            0
+        ][
+            "date"
+        ]
+    )
+
+
+    last_day = (
+        actual_daily_data[
+            -1
+        ][
+            "date"
+        ]
+    )
+
+
+    calendar_training_days = (
+
+        (
+            last_day -
+            first_day
+        ).days
+        +
+        1
+    )
+
+
+    actual_sales_days = len(
+        actual_daily_data
+    )
+
+
+    # =================================================
+    # IMPORTANT ML FIX
+    # =================================================
+    #
+    # Old implementation inserted zero revenue for every
+    # date where no sale existed.
+    #
+    # Example:
+    #
+    # May 1  = 100000
+    # May 2  = 0
+    # May 3  = 0
+    # May 4  = 50000
+    #
+    # Large numbers of artificial zero days caused the
+    # regression line to fall below zero.
+    #
+    # Now:
+    #
+    # Only real sales days are used for ML training.
+    #
+    # =================================================
+
+
+    # =================================================
     # HISTORICAL RESPONSE
-    # =====================================================
+    # =================================================
 
     historical = []
 
 
-    for item in daily_data:
+    for item in actual_daily_data:
 
         historical.append({
 
@@ -496,7 +651,7 @@ def sales_forecast(
                     item[
                         "revenue"
                     ],
-                    2
+                    2,
                 ),
 
             "orders":
@@ -511,9 +666,9 @@ def sales_forecast(
         })
 
 
-    # =====================================================
-    # HISTORICAL VALUES
-    # =====================================================
+    # =================================================
+    # HISTORICAL ARRAYS
+    # =================================================
 
     revenues = [
 
@@ -522,7 +677,7 @@ def sales_forecast(
         ]
 
         for item
-        in daily_data
+        in actual_daily_data
     ]
 
 
@@ -533,7 +688,7 @@ def sales_forecast(
         ]
 
         for item
-        in daily_data
+        in actual_daily_data
     ]
 
 
@@ -544,27 +699,13 @@ def sales_forecast(
         ]
 
         for item
-        in daily_data
+        in actual_daily_data
     ]
 
 
-    # =====================================================
-    # COUNTS
-    # =====================================================
-
-    actual_sales_days = len(
-        raw_daily_data
-    )
-
-
-    calendar_training_days = len(
-        daily_data
-    )
-
-
-    # =====================================================
+    # =================================================
     # TOTALS
-    # =====================================================
+    # =================================================
 
     total_revenue = sum(
         revenues
@@ -581,16 +722,16 @@ def sales_forecast(
     )
 
 
-    # =====================================================
-    # HISTORICAL AVERAGES
-    # =====================================================
+    # =================================================
+    # CALENDAR DAILY AVERAGES
+    # =================================================
 
     average_daily_revenue = (
 
         total_revenue /
         calendar_training_days
 
-        if calendar_training_days
+        if calendar_training_days > 0
 
         else 0
     )
@@ -601,7 +742,7 @@ def sales_forecast(
         total_orders /
         calendar_training_days
 
-        if calendar_training_days
+        if calendar_training_days > 0
 
         else 0
     )
@@ -612,37 +753,103 @@ def sales_forecast(
         total_quantity /
         calendar_training_days
 
-        if calendar_training_days
+        if calendar_training_days > 0
 
         else 0
     )
 
+
+    # =================================================
+    # ACTUAL SALES DAY AVERAGE
+    # =================================================
+
+    average_sales_day_revenue = (
+
+        total_revenue /
+        actual_sales_days
+
+        if actual_sales_days > 0
+
+        else 0
+    )
+
+
+    # =================================================
+    # ORDER VALUE
+    # =================================================
 
     average_order_value = (
 
         total_revenue /
         total_orders
 
-        if total_orders
+        if total_orders > 0
 
         else 0
     )
 
+
+    # =================================================
+    # UNITS PER ORDER
+    # =================================================
 
     average_units_per_order = (
 
         total_quantity /
         total_orders
 
-        if total_orders
+        if total_orders > 0
 
         else 0
     )
 
 
-    # =====================================================
+    # =================================================
+    # RECENT WEIGHTED BASELINE
+    # =================================================
+
+    recent_weighted_daily_revenue = (
+
+        weighted_recent_average(
+            revenues
+        )
+    )
+
+
+    baseline_revenue = (
+
+        recent_weighted_daily_revenue
+
+        if (
+            recent_weighted_daily_revenue >
+            0
+        )
+
+        else
+            average_sales_day_revenue
+    )
+
+
+    if (
+        baseline_revenue <= 0
+        and
+        total_revenue > 0
+    ):
+
+        baseline_revenue = (
+
+            total_revenue /
+
+            max(
+                actual_sales_days,
+                1,
+            )
+        )
+
+
+    # =================================================
     # ML READINESS
-    # =====================================================
+    # =================================================
 
     ml_ready = (
 
@@ -651,15 +858,17 @@ def sales_forecast(
     )
 
 
-    # =====================================================
-    # FORECAST START DATE
-    # =====================================================
+    # =================================================
+    # FORECAST DATE
+    # =================================================
 
     today = date.today()
 
 
     tomorrow = (
+
         today +
+
         timedelta(
             days=1
         )
@@ -667,7 +876,9 @@ def sales_forecast(
 
 
     day_after_last_sale = (
+
         last_day +
+
         timedelta(
             days=1
         )
@@ -675,19 +886,36 @@ def sales_forecast(
 
 
     forecast_start_date = max(
+
         tomorrow,
-        day_after_last_sale
+
+        day_after_last_sale,
     )
 
 
-    # =====================================================
-    # MODEL DEFAULT VALUES
-    # =====================================================
+    forecast_end_date = (
+
+        forecast_start_date +
+
+        timedelta(
+            days=
+                FORECAST_DAYS -
+                1
+        )
+    )
+
+
+    # =================================================
+    # DEFAULT MODEL VALUES
+    # =================================================
 
     forecast = []
 
 
     revenue_r2_score = None
+
+
+    revenue_mae = None
 
 
     revenue_trend_per_day = 0.0
@@ -703,38 +931,56 @@ def sales_forecast(
     )
 
 
-    # =====================================================
+    confidence = (
+        "Low"
+    )
+
+
+    prediction_method = (
+        "Historical Weighted "
+        "Average Fallback"
+    )
+
+
+    hybrid_forecast = False
+
+
+    # =================================================
     # MACHINE LEARNING MODE
-    # =====================================================
+    # =================================================
 
     if ml_ready:
 
 
-        # =================================================
-        # DATE INDEX FEATURES
-        # =================================================
+        # =============================================
+        # SALES-DAY SEQUENCE FEATURE
+        # =============================================
+        #
+        # We intentionally use the sequence of actual
+        # sales days:
+        #
+        # 0, 1, 2, 3, 4 ...
+        #
+        # instead of generating hundreds of zero dates.
+        #
+        # =============================================
 
-        X = []
+        X = [
+
+            [
+                index
+            ]
+
+            for index
+            in range(
+                actual_sales_days
+            )
+        ]
 
 
-        for item in daily_data:
-
-            day_index = (
-                item[
-                    "date"
-                ] -
-                first_day
-            ).days
-
-
-            X.append([
-                day_index
-            ])
-
-
-        # =================================================
-        # TRAIN REVENUE MODEL
-        # =================================================
+        # =============================================
+        # TRAIN LINEAR REGRESSION MODEL
+        # =============================================
 
         revenue_model = (
             LinearRegression()
@@ -742,46 +988,102 @@ def sales_forecast(
 
 
         revenue_model.fit(
+
             X,
-            revenues
+
+            revenues,
         )
 
 
-        # =================================================
-        # MODEL R2 SCORE
-        # =================================================
+        # =============================================
+        # TRAINING PREDICTIONS
+        # =============================================
 
-        revenue_r2_score = float(
+        training_predictions = [
+
+            safe_float(
+                value
+            )
+
+            for value
+            in revenue_model.predict(
+                X
+            )
+        ]
+
+
+        # =============================================
+        # R² SCORE
+        # =============================================
+
+        raw_r2_score = float(
+
             revenue_model.score(
+
                 X,
-                revenues
+
+                revenues,
             )
         )
 
 
-        if not math.isfinite(
-            revenue_r2_score
+        if math.isfinite(
+            raw_r2_score
         ):
 
-            revenue_r2_score = None
+            revenue_r2_score = (
+                raw_r2_score
+            )
 
 
-        # =================================================
+        # =============================================
+        # MAE
+        # =============================================
+
+        revenue_mae = (
+
+            calculate_mae(
+
+                revenues,
+
+                training_predictions,
+            )
+        )
+
+
+        # =============================================
         # MODEL QUALITY
-        # =================================================
+        # =============================================
 
         model_quality = (
+
             get_model_quality(
                 revenue_r2_score
             )
         )
 
 
-        # =================================================
-        # REVENUE TREND
-        # =================================================
+        # =============================================
+        # CONFIDENCE
+        # =============================================
+
+        confidence = (
+
+            get_confidence_label(
+
+                actual_sales_days,
+
+                revenue_r2_score,
+            )
+        )
+
+
+        # =============================================
+        # TREND
+        # =============================================
 
         revenue_trend_per_day = float(
+
             revenue_model.coef_[
                 0
             ]
@@ -815,54 +1117,167 @@ def sales_forecast(
             )
 
 
-        # =================================================
-        # NEXT 7 DAYS FORECAST
-        # =================================================
+        # =============================================
+        # HYBRID MODEL
+        # =============================================
+
+        prediction_method = (
+
+            "Hybrid ML - "
+            "Linear Regression + "
+            "Recent Weighted Baseline"
+        )
+
+
+        hybrid_forecast = True
+
+
+        # =============================================
+        # REALISTIC PREDICTION LIMITS
+        # =============================================
+
+        positive_floor = max(
+
+            baseline_revenue *
+            MIN_BASELINE_RATIO,
+
+            0.0,
+        )
+
+
+        positive_cap = max(
+
+            baseline_revenue *
+            MAX_BASELINE_RATIO,
+
+            average_sales_day_revenue *
+            MAX_BASELINE_RATIO,
+
+            positive_floor,
+        )
+
+
+        # =============================================
+        # NEXT 7 DAYS
+        # =============================================
 
         for day_number in range(
             FORECAST_DAYS
         ):
 
+
             forecast_date = (
+
                 forecast_start_date +
+
                 timedelta(
-                    days=day_number
+                    days=
+                        day_number
                 )
             )
 
 
-            future_index = (
-                forecast_date -
-                first_day
-            ).days
+            future_sequence_index = (
+
+                actual_sales_days +
+
+                day_number
+            )
 
 
-            # =============================================
-            # ML REVENUE PREDICTION
-            # =============================================
+            # =========================================
+            # RAW LINEAR REGRESSION PREDICTION
+            # =========================================
 
-            predicted_revenue = float(
+            raw_ml_prediction = float(
+
                 revenue_model.predict(
+
                     [
                         [
-                            future_index
+                            future_sequence_index
                         ]
                     ]
-                )[
-                    0
-                ]
+                )[0]
             )
+
+
+            # =========================================
+            # PREVENT NEGATIVE ML COMPONENT
+            # =========================================
+
+            ml_component = max(
+
+                raw_ml_prediction,
+
+                0.0,
+            )
+
+
+            # =========================================
+            # HYBRID REVENUE PREDICTION
+            # =========================================
+            #
+            # 60% Machine Learning
+            # 40% Recent weighted sales baseline
+            #
+            # This prevents a weak negative regression
+            # line from turning the complete forecast
+            # into ₹0.
+            #
+            # =========================================
+
+            predicted_revenue = (
+
+                ML_WEIGHT *
+                ml_component
+
+                +
+
+                BASELINE_WEIGHT *
+                baseline_revenue
+            )
+
+
+            # =========================================
+            # POSITIVE REVENUE FLOOR
+            # =========================================
+
+            if total_revenue > 0:
+
+                predicted_revenue = max(
+
+                    predicted_revenue,
+
+                    positive_floor,
+                )
+
+
+            # =========================================
+            # EXTREME VALUE CAP
+            # =========================================
+
+            if positive_cap > 0:
+
+                predicted_revenue = min(
+
+                    predicted_revenue,
+
+                    positive_cap,
+                )
 
 
             predicted_revenue = max(
+
                 predicted_revenue,
-                0
+
+                0.0,
             )
 
 
-            # =============================================
-            # SENSIBLE ORDER PREDICTION
-            # =============================================
+            # =========================================
+            # PREDICT ORDERS
+            # =========================================
 
             if (
                 predicted_revenue > 0
@@ -871,14 +1286,17 @@ def sales_forecast(
             ):
 
                 predicted_orders = round(
+
                     predicted_revenue /
                     average_order_value
                 )
 
 
                 predicted_orders = max(
+
                     predicted_orders,
-                    1
+
+                    1,
                 )
 
 
@@ -887,9 +1305,9 @@ def sales_forecast(
                 predicted_orders = 0
 
 
-            # =============================================
-            # SENSIBLE QUANTITY PREDICTION
-            # =============================================
+            # =========================================
+            # PREDICT QUANTITY
+            # =========================================
 
             if (
                 predicted_orders > 0
@@ -898,14 +1316,17 @@ def sales_forecast(
             ):
 
                 predicted_quantity = round(
+
                     predicted_orders *
                     average_units_per_order
                 )
 
 
                 predicted_quantity = max(
+
                     predicted_quantity,
-                    predicted_orders
+
+                    predicted_orders,
                 )
 
 
@@ -914,9 +1335,9 @@ def sales_forecast(
                 predicted_quantity = 0
 
 
-            # =============================================
+            # =========================================
             # FORECAST ROW
-            # =============================================
+            # =========================================
 
             forecast.append({
 
@@ -928,7 +1349,7 @@ def sales_forecast(
                 "predicted_revenue":
                     round(
                         predicted_revenue,
-                        2
+                        2,
                     ),
 
                 "predicted_orders":
@@ -940,18 +1361,18 @@ def sales_forecast(
                     int(
                         predicted_quantity
                     ),
+
+                "raw_ml_revenue":
+                    round(
+                        raw_ml_prediction,
+                        2,
+                    ),
             })
 
 
-        prediction_method = (
-            "Machine Learning - "
-            "Linear Regression"
-        )
-
-
-    # =====================================================
-    # HISTORICAL AVERAGE FALLBACK
-    # =====================================================
+    # =================================================
+    # FALLBACK FORECAST
+    # =================================================
 
     else:
 
@@ -960,22 +1381,25 @@ def sales_forecast(
             FORECAST_DAYS
         ):
 
+
             forecast_date = (
+
                 forecast_start_date +
+
                 timedelta(
-                    days=day_number
+                    days=
+                        day_number
                 )
             )
 
 
-            predicted_revenue = (
-                average_daily_revenue
+            predicted_revenue = max(
+
+                baseline_revenue,
+
+                0.0,
             )
 
-
-            # =============================================
-            # FALLBACK ORDERS
-            # =============================================
 
             if (
                 predicted_revenue > 0
@@ -983,15 +1407,14 @@ def sales_forecast(
                 average_order_value > 0
             ):
 
-                predicted_orders = round(
-                    predicted_revenue /
-                    average_order_value
-                )
-
-
                 predicted_orders = max(
-                    predicted_orders,
-                    1
+
+                    round(
+                        predicted_revenue /
+                        average_order_value
+                    ),
+
+                    1,
                 )
 
 
@@ -1000,25 +1423,20 @@ def sales_forecast(
                 predicted_orders = 0
 
 
-            # =============================================
-            # FALLBACK QUANTITY
-            # =============================================
-
             if (
                 predicted_orders > 0
                 and
                 average_units_per_order > 0
             ):
 
-                predicted_quantity = round(
-                    predicted_orders *
-                    average_units_per_order
-                )
-
-
                 predicted_quantity = max(
-                    predicted_quantity,
-                    predicted_orders
+
+                    round(
+                        predicted_orders *
+                        average_units_per_order
+                    ),
+
+                    predicted_orders,
                 )
 
 
@@ -1037,7 +1455,7 @@ def sales_forecast(
                 "predicted_revenue":
                     round(
                         predicted_revenue,
-                        2
+                        2,
                     ),
 
                 "predicted_orders":
@@ -1049,21 +1467,20 @@ def sales_forecast(
                     int(
                         predicted_quantity
                     ),
+
+                "raw_ml_revenue":
+                    None,
             })
 
 
-        prediction_method = (
-            "Historical Average Fallback"
-        )
-
-
-    # =====================================================
-    # 7 DAY FORECAST TOTAL
-    # =====================================================
+    # =================================================
+    # 7-DAY FORECAST REVENUE
+    # =================================================
 
     forecast_7_days = sum(
 
         safe_float(
+
             item[
                 "predicted_revenue"
             ]
@@ -1074,28 +1491,29 @@ def sales_forecast(
     )
 
 
-    # =====================================================
-    # PREDICTED DAILY AVERAGE
-    # =====================================================
+    # =================================================
+    # PREDICTED DAILY REVENUE
+    # =================================================
 
     predicted_average_daily_revenue = (
 
         forecast_7_days /
         FORECAST_DAYS
 
-        if FORECAST_DAYS
+        if FORECAST_DAYS > 0
 
         else 0
     )
 
 
-    # =====================================================
+    # =================================================
     # PREDICTED TOTAL ORDERS
-    # =====================================================
+    # =================================================
 
     predicted_total_orders = sum(
 
         safe_int(
+
             item[
                 "predicted_orders"
             ]
@@ -1106,13 +1524,14 @@ def sales_forecast(
     )
 
 
-    # =====================================================
+    # =================================================
     # PREDICTED TOTAL QUANTITY
-    # =====================================================
+    # =================================================
 
     predicted_total_quantity = sum(
 
         safe_int(
+
             item[
                 "predicted_quantity"
             ]
@@ -1123,44 +1542,15 @@ def sales_forecast(
     )
 
 
-    # =====================================================
-    # BUSINESS INSIGHT
-    # =====================================================
+    # =================================================
+    # AI / BUSINESS INSIGHT
+    # =================================================
 
     if ml_ready:
 
 
-        if (
-            trend_direction ==
-            "Increasing"
-        ):
-
-            trend_message = (
-                "The historical revenue "
-                "trend is increasing."
-            )
-
-
-        elif (
-            trend_direction ==
-            "Decreasing"
-        ):
-
-            trend_message = (
-                "The historical revenue "
-                "trend is decreasing."
-            )
-
-
-        else:
-
-            trend_message = (
-                "The historical revenue "
-                "trend is relatively stable."
-            )
-
-
         quality_message = (
+
             f"Model quality is "
             f"{model_quality}"
         )
@@ -1172,28 +1562,51 @@ def sales_forecast(
         ):
 
             quality_message += (
+
                 f" with an R² score of "
-                f"{revenue_r2_score:.3f}."
+                f"{revenue_r2_score:.3f}"
             )
 
 
-        else:
+        if (
+            revenue_mae
+            is not None
+        ):
 
-            quality_message += "."
-        
+            quality_message += (
+
+                f" and MAE of "
+                f"₹{revenue_mae:,.2f}"
+            )
+
+
+        quality_message += "."
+
 
         insight = (
-            "Machine Learning forecast generated "
-            "using Linear Regression. "
-            f"{trend_message} "
+
+            "Hybrid Machine Learning forecast "
+            "generated using Linear Regression "
+            "blended with a recent weighted "
+            "business baseline. "
+
+            f"The revenue trend is "
+            f"{trend_direction.lower()}. "
+
             f"{quality_message} "
-            f"The forecast period starts on "
-            f"{forecast_start_date.strftime('%d %b %Y')}. "
-            f"The business is expected to generate "
+
+            f"Forecast confidence is "
+            f"{confidence}. "
+
+            f"The forecast period is "
+            f"{forecast_start_date.strftime('%d %b %Y')} "
+            f"to "
+            f"{forecast_end_date.strftime('%d %b %Y')}. "
+
+            f"Expected revenue for the next "
+            f"{FORECAST_DAYS} days is "
             f"approximately "
-            f"₹{forecast_7_days:,.2f} "
-            f"during the next "
-            f"{FORECAST_DAYS} days."
+            f"₹{forecast_7_days:,.2f}."
         )
 
 
@@ -1201,48 +1614,55 @@ def sales_forecast(
 
 
         remaining_days = max(
+
             MINIMUM_ML_DAYS -
             actual_sales_days,
-            0
+
+            0,
         )
 
 
         insight = (
+
             f"Only {actual_sales_days} different "
-            f"sales days are currently available. "
-            f"At least {MINIMUM_ML_DAYS} sales days "
-            f"are required before the Machine Learning "
-            f"model is activated. "
-            f"Add {remaining_days} more day(s) "
-            f"of sales history. "
-            f"Until then, the forecast uses the "
-            f"historical daily average. "
-            f"The forecast starts on "
-            f"{forecast_start_date.strftime('%d %b %Y')} "
-            f"and estimated revenue for the next "
+            f"sales day(s) are available. "
+
+            f"At least {MINIMUM_ML_DAYS} sales "
+            f"days are required before the "
+            f"Machine Learning model is activated. "
+
+            f"Add {remaining_days} more sales "
+            f"day(s). "
+
+            "Until then, the forecast uses a "
+            "weighted recent sales baseline. "
+
+            f"Estimated revenue for the next "
             f"{FORECAST_DAYS} days is "
             f"₹{forecast_7_days:,.2f}."
         )
 
 
-    # =====================================================
+    # =================================================
     # FINAL RESPONSE
-    # =====================================================
+    # =================================================
 
     return {
 
         "historical":
             historical,
 
+
         "forecast":
             forecast,
+
 
         "summary": {
 
             "historical_revenue":
                 round(
                     total_revenue,
-                    2
+                    2,
                 ),
 
             "historical_days":
@@ -1254,43 +1674,55 @@ def sales_forecast(
             "average_daily_revenue":
                 round(
                     average_daily_revenue,
-                    2
+                    2,
+                ),
+
+            "average_sales_day_revenue":
+                round(
+                    average_sales_day_revenue,
+                    2,
+                ),
+
+            "recent_weighted_daily_revenue":
+                round(
+                    recent_weighted_daily_revenue,
+                    2,
                 ),
 
             "forecast_7_days":
                 round(
                     forecast_7_days,
-                    2
+                    2,
                 ),
 
             "predicted_average_daily_revenue":
                 round(
                     predicted_average_daily_revenue,
-                    2
+                    2,
                 ),
 
             "average_daily_orders":
                 round(
                     average_daily_orders,
-                    2
+                    2,
                 ),
 
             "average_daily_quantity":
                 round(
                     average_daily_quantity,
-                    2
+                    2,
                 ),
 
             "average_order_value":
                 round(
                     average_order_value,
-                    2
+                    2,
                 ),
 
             "average_units_per_order":
                 round(
                     average_units_per_order,
-                    2
+                    2,
                 ),
 
             "predicted_total_orders":
@@ -1299,6 +1731,7 @@ def sales_forecast(
             "predicted_total_quantity":
                 predicted_total_quantity,
         },
+
 
         "model_info": {
 
@@ -1318,11 +1751,28 @@ def sales_forecast(
                 (
                     round(
                         revenue_r2_score,
-                        4
+                        4,
                     )
 
-                    if revenue_r2_score
-                    is not None
+                    if (
+                        revenue_r2_score
+                        is not None
+                    )
+
+                    else None
+                ),
+
+            "revenue_mae":
+                (
+                    round(
+                        revenue_mae,
+                        2,
+                    )
+
+                    if (
+                        revenue_mae
+                        is not None
+                    )
 
                     else None
                 ),
@@ -1330,10 +1780,13 @@ def sales_forecast(
             "model_quality":
                 model_quality,
 
+            "confidence":
+                confidence,
+
             "revenue_trend_per_day":
                 round(
                     revenue_trend_per_day,
-                    2
+                    2,
                 ),
 
             "trend_direction":
@@ -1346,20 +1799,38 @@ def sales_forecast(
 
             "forecast_end_date":
                 str(
-                    forecast_start_date +
-                    timedelta(
-                        days=
-                            FORECAST_DAYS -
-                            1
-                    )
+                    forecast_end_date
                 ),
 
             "forecast_days":
                 FORECAST_DAYS,
+
+            "hybrid_forecast":
+                hybrid_forecast,
+
+            "ml_weight":
+                (
+                    ML_WEIGHT
+
+                    if ml_ready
+
+                    else 0
+                ),
+
+            "baseline_weight":
+                (
+                    BASELINE_WEIGHT
+
+                    if ml_ready
+
+                    else 1
+                ),
         },
+
 
         "insight":
             insight,
+
 
         "user_id":
             current_user.get(

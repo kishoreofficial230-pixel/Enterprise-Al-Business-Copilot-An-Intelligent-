@@ -2,7 +2,6 @@ from datetime import date, datetime, timedelta, time
 import calendar
 import os
 import re
-from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
@@ -18,6 +17,7 @@ try:
     from dotenv import load_dotenv
 
     load_dotenv()
+
 except ImportError:
     pass
 
@@ -28,6 +28,7 @@ except ImportError:
 
 try:
     from google import genai
+
 except ImportError:
     genai = None
 
@@ -70,41 +71,51 @@ class ChatRequest(BaseModel):
 
 
 # =====================================================
-# GEMINI MODEL
+# SETTINGS
 # =====================================================
 
 GEMINI_MODEL = os.getenv(
     "GEMINI_MODEL",
-    "gemini-3.5-flash",
+    "gemini-3.6-flash",
 )
 
 
-# =====================================================
-# BUSINESS KEYWORDS
-# =====================================================
-
 BUSINESS_WORDS = {
+
     "sale",
     "sales",
+
     "order",
     "orders",
+
     "revenue",
     "income",
     "turnover",
+
     "amount",
+
     "quantity",
     "units",
     "sold",
+
     "business",
+
     "product",
     "products",
+
     "category",
+
     "customer",
     "customers",
+
+    "forecast",
+    "predict",
+    "prediction",
 }
 
 
 MONTH_PATTERN = (
+
     r"jan(?:uary)?|"
     r"feb(?:ruary)?|"
     r"mar(?:ch)?|"
@@ -136,7 +147,9 @@ def normalize_text(
 ):
 
     return " ".join(
-        value
+        str(
+            value or ""
+        )
         .lower()
         .strip()
         .split()
@@ -145,12 +158,12 @@ def normalize_text(
 
 def contains_any(
     text: str,
-    words,
+    phrases,
 ):
 
     return any(
-        word in text
-        for word in words
+        phrase in text
+        for phrase in phrases
     )
 
 
@@ -158,18 +171,17 @@ def has_business_word(
     text: str,
 ):
 
-    for word in BUSINESS_WORDS:
+    return any(
 
-        found = re.search(
+        re.search(
             rf"\b{re.escape(word)}\b",
             text,
             flags=re.IGNORECASE,
         )
 
-        if found:
-            return True
-
-    return False
+        for word
+        in BUSINESS_WORDS
+    )
 
 
 def format_date(
@@ -181,8 +193,44 @@ def format_date(
     )
 
 
+def safe_float(
+    value,
+):
+
+    try:
+
+        return float(
+            value or 0
+        )
+
+    except (
+        TypeError,
+        ValueError,
+    ):
+
+        return 0.0
+
+
+def safe_int(
+    value,
+):
+
+    try:
+
+        return int(
+            value or 0
+        )
+
+    except (
+        TypeError,
+        ValueError,
+    ):
+
+        return 0
+
+
 # =====================================================
-# CURRENT LOGGED-IN USER
+# LOGGED-IN USER
 # =====================================================
 
 def get_logged_in_user(
@@ -194,25 +242,32 @@ def get_logged_in_user(
         "sub"
     )
 
+
     if user_id is not None:
 
         try:
 
-            numeric_user_id = int(
-                user_id
-            )
-
             user = (
-                db.query(User)
+
+                db.query(
+                    User
+                )
+
                 .filter(
                     User.id ==
-                    numeric_user_id
+                    int(
+                        user_id
+                    )
                 )
+
                 .first()
             )
 
+
             if user:
+
                 return user
+
 
         except (
             TypeError,
@@ -226,18 +281,22 @@ def get_logged_in_user(
         "email"
     )
 
+
     if email:
 
-        user = (
-            db.query(User)
+        return (
+
+            db.query(
+                User
+            )
+
             .filter(
                 User.email ==
                 email
             )
+
             .first()
         )
-
-        return user
 
 
     return None
@@ -256,44 +315,51 @@ def get_user_details(
 
     if user:
 
-        full_name = user.full_name
+        return {
 
-        email = user.email
+            "full_name":
+                user.full_name,
 
-        role = user.role
+            "email":
+                user.email,
+
+            "role":
+                user.role,
+        }
+
+
+    email = current_user.get(
+        "email",
+        "Unknown",
+    )
+
+
+    role = current_user.get(
+        "role",
+        "Employee",
+    )
+
+
+    if email != "Unknown":
+
+        full_name = (
+
+            email
+            .split("@")[0]
+            .replace(
+                ".",
+                " ",
+            )
+            .replace(
+                "_",
+                " ",
+            )
+            .title()
+        )
 
     else:
 
-        email = current_user.get(
-            "email",
-            "Unknown",
-        )
-
-        role = current_user.get(
-            "role",
-            "Employee",
-        )
-
-
-        if email != "Unknown":
-
-            full_name = (
-                email
-                .split("@")[0]
-                .replace(
-                    ".",
-                    " ",
-                )
-                .replace(
-                    "_",
-                    " ",
-                )
-                .title()
-            )
-
-        else:
-
-            full_name = "User"
+        full_name = "User"
 
 
     return {
@@ -317,72 +383,96 @@ def get_business_metrics(
     db: Session,
 ):
 
-    total_revenue = float(
+    total_revenue = safe_float(
 
         db.query(
+
             func.coalesce(
+
                 func.sum(
                     Sale.amount
                 ),
+
                 0,
             )
         )
+
         .scalar()
-        or 0
     )
 
 
     total_sales = (
-        db.query(Sale)
+
+        db.query(
+            Sale
+        )
+
         .count()
     )
 
 
-    total_quantity = int(
+    total_quantity = safe_int(
 
         db.query(
+
             func.coalesce(
+
                 func.sum(
                     Sale.quantity
                 ),
+
                 0,
             )
         )
+
         .scalar()
-        or 0
     )
 
 
     total_customers = (
-        db.query(Customer)
+
+        db.query(
+            Customer
+        )
+
         .count()
     )
 
 
     active_customers = (
 
-        db.query(Customer)
+        db.query(
+            Customer
+        )
+
         .filter(
+
             func.lower(
                 Customer.status
             )
             ==
             "active"
         )
+
         .count()
     )
 
 
     inactive_customers = (
 
-        db.query(Customer)
+        db.query(
+            Customer
+        )
+
         .filter(
+
             func.lower(
                 Customer.status
             )
             ==
             "inactive"
         )
+
         .count()
     )
 
@@ -437,9 +527,11 @@ def get_business_metrics(
         )
 
         .order_by(
+
             func.sum(
                 Sale.amount
-            ).desc()
+            )
+            .desc()
         )
 
         .first()
@@ -485,9 +577,11 @@ def get_business_metrics(
         )
 
         .order_by(
+
             func.sum(
                 Sale.amount
-            ).desc()
+            )
+            .desc()
         )
 
         .first()
@@ -526,7 +620,7 @@ def get_business_metrics(
 
 
 # =====================================================
-# DATE PARSER
+# DATE HELPERS
 # =====================================================
 
 def clean_date_text(
@@ -595,9 +689,10 @@ def parse_date_text(
 
             ).date()
 
+
         except ValueError:
 
-            continue
+            pass
 
 
     return None
@@ -655,6 +750,7 @@ def extract_explicit_dates(
             if parsed:
 
                 found.append(
+
                     (
                         match.start(),
                         parsed,
@@ -663,6 +759,7 @@ def extract_explicit_dates(
 
 
     found.sort(
+
         key=lambda item:
             item[0]
     )
@@ -686,10 +783,6 @@ def extract_explicit_dates(
 
     return unique_dates
 
-
-# =====================================================
-# MONTH + YEAR PARSER
-# =====================================================
 
 def extract_month_period(
     text: str,
@@ -716,6 +809,7 @@ def extract_month_period(
         match.group(1)
     )
 
+
     year = int(
         match.group(2)
     )
@@ -732,6 +826,7 @@ def extract_month_period(
         try:
 
             month_number = (
+
                 datetime.strptime(
 
                     month_text,
@@ -741,11 +836,13 @@ def extract_month_period(
                 ).month
             )
 
+
             break
+
 
         except ValueError:
 
-            continue
+            pass
 
 
     if not month_number:
@@ -754,46 +851,59 @@ def extract_month_period(
 
 
     last_day = (
+
         calendar.monthrange(
+
             year,
+
             month_number,
+
         )[1]
     )
 
 
     start_date = date(
+
         year,
+
         month_number,
+
         1,
     )
 
 
     end_date = date(
+
         year,
+
         month_number,
+
         last_day,
     )
 
 
     label = datetime(
+
         year,
+
         month_number,
+
         1,
+
     ).strftime(
         "%B %Y"
     )
 
 
     return (
+
         start_date,
+
         end_date,
+
         label,
     )
 
-
-# =====================================================
-# RELATIVE DATE PERIODS
-# =====================================================
 
 def get_relative_period(
     question: str,
@@ -802,42 +912,61 @@ def get_relative_period(
     today = date.today()
 
 
+    # =================================================
     # YESTERDAY
+    # =================================================
 
     if re.search(
+
         r"\byesterday\b",
+
         question,
     ):
 
         target = (
+
             today -
+
             timedelta(
                 days=1
             )
         )
 
+
         return (
+
             target,
+
             target,
+
             "Yesterday",
         )
 
 
+    # =================================================
     # TODAY
+    # =================================================
 
     if re.search(
+
         r"\btoday\b",
+
         question,
     ):
 
         return (
+
             today,
+
             today,
+
             "Today",
         )
 
 
+    # =================================================
     # THIS WEEK
+    # =================================================
 
     if "this week" in question:
 
@@ -846,18 +975,25 @@ def get_relative_period(
             today -
 
             timedelta(
-                days=today.weekday()
+                days=
+                    today.weekday()
             )
         )
 
+
         return (
+
             start,
+
             today,
+
             "This week",
         )
 
 
+    # =================================================
     # LAST WEEK
+    # =================================================
 
     if "last week" in question:
 
@@ -866,7 +1002,8 @@ def get_relative_period(
             today -
 
             timedelta(
-                days=today.weekday()
+                days=
+                    today.weekday()
             )
         )
 
@@ -892,32 +1029,41 @@ def get_relative_period(
 
 
         return (
+
             start,
+
             end,
+
             "Last week",
         )
 
 
+    # =================================================
     # THIS MONTH
+    # =================================================
 
     if "this month" in question:
 
-        start = today.replace(
-            day=1
-        )
-
         return (
-            start,
+
+            today.replace(
+                day=1
+            ),
+
             today,
+
             "This month",
         )
 
 
+    # =================================================
     # LAST MONTH
+    # =================================================
 
     if "last month" in question:
 
         current_month_start = (
+
             today.replace(
                 day=1
             )
@@ -935,6 +1081,7 @@ def get_relative_period(
 
 
         previous_month_start = (
+
             previous_month_end
             .replace(
                 day=1
@@ -943,8 +1090,11 @@ def get_relative_period(
 
 
         return (
+
             previous_month_start,
+
             previous_month_end,
+
             "Last month",
         )
 
@@ -953,7 +1103,7 @@ def get_relative_period(
 
 
 # =====================================================
-# SALES FOR DATE / RANGE
+# SALES PERIOD SUMMARY
 # =====================================================
 
 def sales_period_summary(
@@ -967,25 +1117,22 @@ def sales_period_summary(
     label: str,
 ):
 
+    start_datetime = datetime.combine(
 
-    start_datetime = (
-        datetime.combine(
-            start_date,
-            time.min,
-        )
+        start_date,
+
+        time.min,
     )
 
 
-    end_exclusive = (
-        datetime.combine(
+    end_exclusive = datetime.combine(
 
-            end_date +
-            timedelta(
-                days=1
-            ),
+        end_date +
+        timedelta(
+            days=1
+        ),
 
-            time.min,
-        )
+        time.min,
     )
 
 
@@ -999,13 +1146,11 @@ def sales_period_summary(
     ]
 
 
-    # =================================================
-    # ORDER COUNT
-    # =================================================
-
     orders = (
 
-        db.query(Sale)
+        db.query(
+            Sale
+        )
 
         .filter(
             *filters
@@ -1015,11 +1160,7 @@ def sales_period_summary(
     )
 
 
-    # =================================================
-    # REVENUE
-    # =================================================
-
-    revenue = float(
+    revenue = safe_float(
 
         db.query(
 
@@ -1038,16 +1179,10 @@ def sales_period_summary(
         )
 
         .scalar()
-
-        or 0
     )
 
 
-    # =================================================
-    # QUANTITY
-    # =================================================
-
-    quantity = int(
+    quantity = safe_int(
 
         db.query(
 
@@ -1066,14 +1201,8 @@ def sales_period_summary(
         )
 
         .scalar()
-
-        or 0
     )
 
-
-    # =================================================
-    # TOP PRODUCT FOR PERIOD
-    # =================================================
 
     top_product = (
 
@@ -1097,31 +1226,26 @@ def sales_period_summary(
         )
 
         .order_by(
+
             func.sum(
                 Sale.amount
-            ).desc()
+            )
+            .desc()
         )
 
         .first()
     )
 
 
-    # =================================================
-    # NO DATA
-    # =================================================
-
     if orders == 0:
 
         return (
+
             f"{label}: "
             f"no sales records "
             f"were found."
         )
 
-
-    # =================================================
-    # DATE TEXT
-    # =================================================
 
     if (
         start_date ==
@@ -1129,6 +1253,7 @@ def sales_period_summary(
     ):
 
         period_text = (
+
             f"On "
             f"{format_date(start_date)}"
         )
@@ -1144,10 +1269,6 @@ def sales_period_summary(
         )
 
 
-    # =================================================
-    # ANSWER
-    # =================================================
-
     answer = (
 
         f"{period_text}, "
@@ -1155,7 +1276,8 @@ def sales_period_summary(
         f"{orders} sales/orders "
         f"with revenue of "
         f"{money(revenue)} "
-        f"and {quantity} units sold."
+        f"and "
+        f"{quantity} units sold."
     )
 
 
@@ -1224,8 +1346,10 @@ def get_product_answer(
     for row in rows:
 
         product_name = (
+
             row.product_name
             or ""
+
         ).strip()
 
 
@@ -1248,13 +1372,14 @@ def get_product_answer(
 
             return (
 
-                f"{product_name} has generated "
+                f"{product_name} "
+                f"has generated "
                 f"{money(row.revenue)} "
                 f"from "
-                f"{int(row.orders or 0)} "
+                f"{safe_int(row.orders)} "
                 f"sales/orders, "
                 f"with "
-                f"{int(row.quantity or 0)} "
+                f"{safe_int(row.quantity)} "
                 f"units sold."
             )
 
@@ -1312,8 +1437,10 @@ def get_category_answer(
     for row in rows:
 
         category_name = (
+
             row.category
             or ""
+
         ).strip()
 
 
@@ -1336,14 +1463,15 @@ def get_category_answer(
 
             return (
 
-                f"The {category_name} category "
-                f"has generated "
+                f"The "
+                f"{category_name} "
+                f"category has generated "
                 f"{money(row.revenue)} "
                 f"from "
-                f"{int(row.orders or 0)} "
+                f"{safe_int(row.orders)} "
                 f"sales/orders, "
                 f"with "
-                f"{int(row.quantity or 0)} "
+                f"{safe_int(row.quantity)} "
                 f"units sold."
             )
 
@@ -1372,6 +1500,12 @@ def build_recommendation(
     )
 
 
+    inactive_customers = metrics.get(
+        "inactive_customers",
+        0,
+    )
+
+
     if top_product:
 
         recommendations.append(
@@ -1391,14 +1525,6 @@ def build_recommendation(
             f"category because it currently "
             f"leads revenue."
         )
-
-
-    inactive_customers = (
-        metrics.get(
-            "inactive_customers",
-            0,
-        )
-    )
 
 
     if inactive_customers:
@@ -1445,11 +1571,15 @@ def build_risk_answer(
     risks = []
 
 
-    inactive_customers = (
-        metrics.get(
-            "inactive_customers",
-            0,
-        )
+    inactive_customers = metrics.get(
+        "inactive_customers",
+        0,
+    )
+
+
+    total_sales = metrics.get(
+        "total_sales",
+        0,
     )
 
 
@@ -1460,12 +1590,6 @@ def build_risk_answer(
             f"{inactive_customers} "
             f"customer(s) are inactive."
         )
-
-
-    total_sales = metrics.get(
-        "total_sales",
-        0,
-    )
 
 
     if total_sales < 5:
@@ -1501,7 +1625,219 @@ def build_risk_answer(
 
 
 # =====================================================
-# GEMINI MINI CHAT
+# ML FORECAST ANSWER
+# =====================================================
+
+def build_forecast_answer(
+    db: Session,
+    current_user: dict,
+):
+
+    forecast_data = sales_forecast(
+
+        db=db,
+
+        current_user=
+            current_user,
+    )
+
+
+    summary = forecast_data.get(
+
+        "summary",
+
+        {},
+    )
+
+
+    model_info = forecast_data.get(
+
+        "model_info",
+
+        {},
+    )
+
+
+    forecast_total = summary.get(
+
+        "forecast_7_days",
+
+        0,
+    )
+
+
+    predicted_orders = summary.get(
+
+        "predicted_total_orders",
+
+        0,
+    )
+
+
+    predicted_quantity = summary.get(
+
+        "predicted_total_quantity",
+
+        0,
+    )
+
+
+    method = model_info.get(
+
+        "method",
+
+        "Forecast model",
+    )
+
+
+    quality = model_info.get(
+
+        "model_quality",
+
+        "Not Available",
+    )
+
+
+    confidence = model_info.get(
+
+        "confidence",
+
+        "Not Available",
+    )
+
+
+    trend = model_info.get(
+
+        "trend_direction",
+
+        "Not Available",
+    )
+
+
+    r2_score = model_info.get(
+        "revenue_r2_score"
+    )
+
+
+    mae = model_info.get(
+        "revenue_mae"
+    )
+
+
+    forecast_start = model_info.get(
+        "forecast_start_date"
+    )
+
+
+    forecast_end = model_info.get(
+        "forecast_end_date"
+    )
+
+
+    ml_ready = model_info.get(
+        "ml_ready",
+        False,
+    )
+
+
+    answer = (
+
+        f"The next 7-day forecast is "
+        f"{money(forecast_total)} "
+        f"in predicted revenue, "
+        f"about "
+        f"{predicted_orders} "
+        f"predicted orders, "
+        f"and "
+        f"{predicted_quantity} "
+        f"predicted units. "
+
+        f"Trend: "
+        f"{trend}. "
+
+        f"Method: "
+        f"{method}. "
+
+        f"Model quality: "
+        f"{quality}. "
+
+        f"Confidence: "
+        f"{confidence}."
+    )
+
+
+    if (
+        r2_score
+        is not None
+    ):
+
+        answer += (
+
+            f" R²: "
+            f"{safe_float(r2_score):.4f}."
+        )
+
+
+    if (
+        mae
+        is not None
+    ):
+
+        answer += (
+
+            f" MAE: "
+            f"{money(mae)}."
+        )
+
+
+    if (
+        forecast_start
+        and
+        forecast_end
+    ):
+
+        answer += (
+
+            f" Forecast period: "
+            f"{forecast_start} "
+            f"to "
+            f"{forecast_end}."
+        )
+
+
+    if not ml_ready:
+
+        answer += (
+
+            " The ML model is not fully ready yet, "
+            "so the fallback forecasting method "
+            "is being used."
+        )
+
+
+    elif (
+        str(
+            confidence
+        ).lower()
+        ==
+        "low"
+    ):
+
+        answer += (
+
+            " The model is working, "
+            "but confidence is low, "
+            "so use this forecast as "
+            "decision support rather "
+            "than an exact result."
+        )
+
+
+    return answer
+
+
+# =====================================================
+# GEMINI FALLBACK
 # =====================================================
 
 def get_gemini_answer(
@@ -1513,16 +1849,11 @@ def get_gemini_answer(
     metrics: dict,
 ):
 
-
     api_key = os.getenv(
         "GEMINI_API_KEY",
         "",
     ).strip()
 
-
-    # =================================================
-    # GEMINI NOT CONFIGURED
-    # =================================================
 
     if (
         not api_key
@@ -1533,15 +1864,12 @@ def get_gemini_answer(
         return None
 
 
-    # =================================================
-    # SAFE BUSINESS CONTEXT
-    # =================================================
-
     if metrics.get(
         "top_product"
     ):
 
         top_product = (
+
             metrics[
                 "top_product"
             ].product_name
@@ -1557,6 +1885,7 @@ def get_gemini_answer(
     ):
 
         top_category = (
+
             metrics[
                 "top_category"
             ].category
@@ -1567,14 +1896,8 @@ def get_gemini_answer(
         top_category = "N/A"
 
 
-    # =================================================
-    # GEMINI SYSTEM PROMPT
-    # =================================================
-
     prompt = f"""
 You are Enterprise AI Business Copilot.
-
-You are a small friendly AI assistant inside a business analytics project.
 
 USER PROFILE
 Name: {user_details["full_name"]}
@@ -1612,10 +1935,6 @@ USER QUESTION
 """.strip()
 
 
-    # =================================================
-    # GEMINI REQUEST
-    # =================================================
-
     try:
 
         client = genai.Client(
@@ -1624,6 +1943,7 @@ USER QUESTION
 
 
         response = (
+
             client.models
             .generate_content(
 
@@ -1639,9 +1959,11 @@ USER QUESTION
         if response.text:
 
             answer = (
+
                 response.text
                 .strip()
             )
+
 
             if answer:
 
@@ -1651,7 +1973,9 @@ USER QUESTION
     except Exception as error:
 
         print(
+
             "Gemini AI fallback error:",
+
             str(error),
         )
 
@@ -1672,32 +1996,27 @@ def build_business_answer(
     current_user: dict,
 ):
 
-
     q = normalize_text(
         question
     )
 
 
-    user_details = (
-        get_user_details(
-            db,
-            current_user,
-        )
+    user_details = get_user_details(
+
+        db,
+
+        current_user,
     )
 
 
-    metrics = (
-        get_business_metrics(
-            db
-        )
+    metrics = get_business_metrics(
+        db
     )
 
 
-    name = (
-        user_details[
-            "full_name"
-        ]
-    )
+    name = user_details[
+        "full_name"
+    ]
 
 
     # =================================================
@@ -1737,15 +2056,13 @@ def build_business_answer(
         return (
 
             f"Hello {name}! 👋 "
-            f"Welcome to Enterprise AI "
-            f"Business Copilot. "
             f"I'm ready to help with "
             f"your business data."
         )
 
 
     # =================================================
-    # WHAT IS MY NAME
+    # USER NAME
     # =================================================
 
     if contains_any(
@@ -1767,7 +2084,7 @@ def build_business_answer(
 
 
     # =================================================
-    # MY EMAIL
+    # USER EMAIL
     # =================================================
 
     if contains_any(
@@ -1790,7 +2107,7 @@ def build_business_answer(
 
 
     # =================================================
-    # MY ROLE
+    # USER ROLE
     # =================================================
 
     if contains_any(
@@ -1828,11 +2145,10 @@ def build_business_answer(
 
         return (
 
-            "I'm Enterprise AI Business "
-            "Copilot, your mini AI assistant "
-            "for business analytics, sales, "
-            "customers, forecasting and "
-            "recommendations."
+            "I'm Enterprise AI Business Copilot, "
+            "your assistant for business analytics, "
+            "sales, customers, forecasting, risks "
+            "and recommendations."
         )
 
 
@@ -1854,13 +2170,10 @@ def build_business_answer(
 
         return (
 
-            "I can answer questions about "
-            "your name and account, revenue, "
-            "sales, customers, products, "
-            "categories, date-wise sales, "
-            "monthly and weekly performance, "
-            "recent sales, ML forecasts, "
-            "business risks and recommendations. "
+            "I can answer revenue, sales, "
+            "customers, products, categories, "
+            "date-wise performance, recent sales, "
+            "ML forecasts, risks and recommendations. "
             "I can also handle simple conversation."
         )
 
@@ -1881,9 +2194,9 @@ def build_business_answer(
 
         return (
 
-            f"I'm doing great, {name}! "
-            f"I'm ready to help with your "
-            f"business data."
+            f"I'm doing well, {name}! "
+            f"I'm ready to help with "
+            f"your business data."
         )
 
 
@@ -1904,9 +2217,8 @@ def build_business_answer(
 
         return (
 
-            f"You're welcome, {name}! 😊 "
-            f"I'm here whenever you need "
-            f"business insights."
+            f"You're welcome, "
+            f"{name}! 😊"
         )
 
 
@@ -1924,7 +2236,8 @@ def build_business_answer(
 
         return (
 
-            f"Goodbye, {name}! 👋 "
+            f"Goodbye, "
+            f"{name}! 👋 "
             f"Have a productive day."
         )
 
@@ -1934,6 +2247,7 @@ def build_business_answer(
     # =================================================
 
     if (
+
         contains_any(
 
             q,
@@ -1961,7 +2275,8 @@ def build_business_answer(
 
 
     # =================================================
-    # SALES FORECAST
+    # ML FORECAST
+    # MUST COME BEFORE GENERIC SALES MATCH
     # =================================================
 
     if contains_any(
@@ -1979,104 +2294,37 @@ def build_business_answer(
         ],
     ):
 
+        return build_forecast_answer(
 
-        forecast_data = (
+            db,
 
-            sales_forecast(
-
-                db=db,
-
-                current_user=
-                    current_user,
-            )
-        )
-
-
-        summary = (
-            forecast_data.get(
-                "summary",
-                {},
-            )
-        )
-
-
-        model_info = (
-            forecast_data.get(
-                "model_info",
-                {},
-            )
-        )
-
-
-        forecast_total = (
-            summary.get(
-                "forecast_7_days",
-                0,
-            )
-        )
-
-
-        predicted_orders = (
-            summary.get(
-                "predicted_total_orders",
-                0,
-            )
-        )
-
-
-        method = (
-            model_info.get(
-                "method",
-                "Forecast model",
-            )
-        )
-
-
-        quality = (
-            model_info.get(
-                "model_quality",
-                "Not Available",
-            )
-        )
-
-
-        return (
-
-            f"The next 7-day forecast is "
-            f"{money(forecast_total)} "
-            f"in predicted revenue "
-            f"with about "
-            f"{predicted_orders} "
-            f"predicted orders. "
-            f"Method: {method}. "
-            f"Model quality: {quality}."
+            current_user,
         )
 
 
     # =================================================
-    # EXACT DATE OR DATE RANGE
+    # EXACT DATE / DATE RANGE
     # =================================================
 
-    explicit_dates = (
-        extract_explicit_dates(
-            question
-        )
+    explicit_dates = extract_explicit_dates(
+        question
     )
 
 
     if (
+
         explicit_dates
+
         and
-        has_business_word(q)
+
+        has_business_word(
+            q
+        )
     ):
-
-
-        # TWO DATES = RANGE
 
         if len(
             explicit_dates
         ) >= 2:
-
 
             start_date = min(
 
@@ -2106,8 +2354,6 @@ def build_business_answer(
             )
 
 
-        # ONE DATE
-
         target_date = (
             explicit_dates[0]
         )
@@ -2131,19 +2377,21 @@ def build_business_answer(
     # MONTH + YEAR
     # =================================================
 
-    month_period = (
-        extract_month_period(
-            question
-        )
+    month_period = extract_month_period(
+        question
     )
 
 
     if (
-        month_period
-        and
-        has_business_word(q)
-    ):
 
+        month_period
+
+        and
+
+        has_business_word(
+            q
+        )
+    ):
 
         (
             start_date,
@@ -2165,22 +2413,24 @@ def build_business_answer(
 
 
     # =================================================
-    # TODAY / YESTERDAY / WEEK / MONTH
+    # RELATIVE DATE
     # =================================================
 
-    relative_period = (
-        get_relative_period(
-            q
-        )
+    relative_period = get_relative_period(
+        q
     )
 
 
     if (
-        relative_period
-        and
-        has_business_word(q)
-    ):
 
+        relative_period
+
+        and
+
+        has_business_word(
+            q
+        )
+    ):
 
         (
             start_date,
@@ -2219,17 +2469,21 @@ def build_business_answer(
         ],
     ):
 
-
         recent_sales = (
 
-            db.query(Sale)
+            db.query(
+                Sale
+            )
 
             .order_by(
+
                 Sale.sale_date
                 .desc()
             )
 
-            .limit(5)
+            .limit(
+                5
+            )
 
             .all()
         )
@@ -2238,8 +2492,7 @@ def build_business_answer(
         if not recent_sales:
 
             return (
-                "There are no sales "
-                "records yet."
+                "There are no sales records yet."
             )
 
 
@@ -2250,27 +2503,29 @@ def build_business_answer(
 
         for sale in recent_sales:
 
+            date_text = (
 
-            if sale.sale_date:
-
-                date_text = (
-                    sale.sale_date
-                    .strftime(
-                        "%d/%m/%Y"
-                    )
+                sale.sale_date
+                .strftime(
+                    "%d/%m/%Y"
                 )
 
-            else:
+                if sale.sale_date
 
-                date_text = "N/A"
+                else "N/A"
+            )
 
 
             lines.append(
 
-                f"• {sale.product_name} — "
-                f"{money(sale.amount)} — "
+                f"• "
+                f"{sale.product_name} "
+                f"— "
+                f"{money(sale.amount)} "
+                f"— "
                 f"{sale.customer_name or 'Unknown customer'} "
-                f"— {date_text}"
+                f"— "
+                f"{date_text}"
             )
 
 
@@ -2294,12 +2549,14 @@ def build_business_answer(
         ],
     ):
 
-
         highest_sale = (
 
-            db.query(Sale)
+            db.query(
+                Sale
+            )
 
             .order_by(
+
                 Sale.amount
                 .desc()
             )
@@ -2311,8 +2568,7 @@ def build_business_answer(
         if not highest_sale:
 
             return (
-                "There are no sales "
-                "records yet."
+                "There are no sales records yet."
             )
 
 
@@ -2339,12 +2595,14 @@ def build_business_answer(
         ],
     ):
 
-
         lowest_sale = (
 
-            db.query(Sale)
+            db.query(
+                Sale
+            )
 
             .order_by(
+
                 Sale.amount
                 .asc()
             )
@@ -2356,8 +2614,7 @@ def build_business_answer(
         if not lowest_sale:
 
             return (
-                "There are no sales "
-                "records yet."
+                "There are no sales records yet."
             )
 
 
@@ -2367,6 +2624,62 @@ def build_business_answer(
             f"{money(lowest_sale.amount)} "
             f"for "
             f"{lowest_sale.product_name}."
+        )
+
+
+    # =================================================
+    # FOCUS PRODUCT
+    # FIXES: "Which product should I focus on?"
+    # =================================================
+
+    if contains_any(
+
+        q,
+
+        [
+            "which product should i focus on",
+            "what product should i focus on",
+            "product should i focus on",
+            "which product should i promote",
+            "which product should i market",
+            "product to focus on",
+            "focus product",
+            "focus on product",
+        ],
+    ):
+
+        top_product = metrics.get(
+            "top_product"
+        )
+
+
+        if not top_product:
+
+            return (
+
+                "There are no sales records yet, "
+                "so I cannot recommend a "
+                "focus product."
+            )
+
+
+        return (
+
+            f"You should currently focus on "
+            f"{top_product.product_name}. "
+
+            f"It is your top product by revenue "
+            f"with "
+            f"{money(top_product.revenue)} "
+            f"in revenue, "
+            f"{safe_int(top_product.quantity)} "
+            f"units sold, and "
+            f"{safe_int(top_product.orders)} "
+            f"sales/orders. "
+
+            f"Keep stock available and "
+            f"prioritize marketing for "
+            f"this product."
         )
 
 
@@ -2388,19 +2701,15 @@ def build_business_answer(
         ],
     ):
 
-
-        top_product = (
-            metrics[
-                "top_product"
-            ]
+        top_product = metrics.get(
+            "top_product"
         )
 
 
         if not top_product:
 
             return (
-                "There are no sales "
-                "records yet."
+                "There are no sales records yet."
             )
 
 
@@ -2411,8 +2720,55 @@ def build_business_answer(
             f"with "
             f"{money(top_product.revenue)} "
             f"in revenue and "
-            f"{int(top_product.quantity or 0)} "
+            f"{safe_int(top_product.quantity)} "
             f"units sold."
+        )
+
+
+    # =================================================
+    # FOCUS CATEGORY
+    # =================================================
+
+    if contains_any(
+
+        q,
+
+        [
+            "which category should i focus on",
+            "what category should i focus on",
+            "category should i focus on",
+            "category to focus on",
+            "focus category",
+        ],
+    ):
+
+        top_category = metrics.get(
+            "top_category"
+        )
+
+
+        if not top_category:
+
+            return (
+
+                "There are no categorized "
+                "sales records yet."
+            )
+
+
+        return (
+
+            f"You should currently focus on "
+            f"the "
+            f"{top_category.category} "
+            f"category. "
+
+            f"It leads revenue with "
+            f"{money(top_category.revenue)}, "
+            f"{safe_int(top_category.quantity)} "
+            f"units sold, and "
+            f"{safe_int(top_category.orders)} "
+            f"sales/orders."
         )
 
 
@@ -2432,17 +2788,15 @@ def build_business_answer(
         ],
     ):
 
-
-        top_category = (
-            metrics[
-                "top_category"
-            ]
+        top_category = metrics.get(
+            "top_category"
         )
 
 
         if not top_category:
 
             return (
+
                 "There are no categorized "
                 "sales records yet."
             )
@@ -2461,11 +2815,11 @@ def build_business_answer(
     # SPECIFIC PRODUCT
     # =================================================
 
-    product_answer = (
-        get_product_answer(
-            db,
-            q,
-        )
+    product_answer = get_product_answer(
+
+        db,
+
+        q,
     )
 
 
@@ -2478,11 +2832,11 @@ def build_business_answer(
     # SPECIFIC CATEGORY
     # =================================================
 
-    category_answer = (
-        get_category_answer(
-            db,
-            q,
-        )
+    category_answer = get_category_answer(
+
+        db,
+
+        q,
     )
 
 
@@ -2492,7 +2846,7 @@ def build_business_answer(
 
 
     # =================================================
-    # RECOMMENDATION
+    # BUSINESS RECOMMENDATION
     # =================================================
 
     if contains_any(
@@ -2505,6 +2859,10 @@ def build_business_answer(
             "suggestion",
             "what should i do",
             "improve business",
+            "increase business",
+            "grow business",
+            "increase revenue",
+            "boost revenue",
         ],
     ):
 
@@ -2532,6 +2890,32 @@ def build_business_answer(
 
         return build_risk_answer(
             metrics
+        )
+
+
+    # =================================================
+    # PROFIT
+    # =================================================
+
+    if contains_any(
+
+        q,
+
+        [
+            "profit",
+            "margin",
+            "gross profit",
+            "net profit",
+        ],
+    ):
+
+        return (
+
+            "I can calculate revenue from "
+            "the current sales data, but "
+            "exact profit cannot be calculated "
+            "because product cost/expense data "
+            "is not available."
         )
 
 
@@ -2600,9 +2984,10 @@ def build_business_answer(
             f"You have "
             f"{metrics['total_customers']} "
             f"customers: "
-            f"{metrics['active_customers']} active "
-            f"and "
-            f"{metrics['inactive_customers']} inactive."
+            f"{metrics['active_customers']} "
+            f"active and "
+            f"{metrics['inactive_customers']} "
+            f"inactive."
         )
 
 
@@ -2650,8 +3035,8 @@ def build_business_answer(
         return (
 
             f"The total quantity sold is "
-            f"{metrics['total_quantity']} units "
-            f"across "
+            f"{metrics['total_quantity']} "
+            f"units across "
             f"{metrics['total_sales']} "
             f"sales/orders."
         )
@@ -2666,10 +3051,12 @@ def build_business_answer(
         q,
 
         [
-            "sales",
-            "orders",
-            "order count",
             "how many sales",
+            "order count",
+            "total sales",
+            "total orders",
+            "sales count",
+            "orders count",
         ],
     ):
 
@@ -2678,9 +3065,10 @@ def build_business_answer(
             f"You currently have "
             f"{metrics['total_sales']} "
             f"sales/orders. "
+
             f"Total quantity sold is "
-            f"{metrics['total_quantity']} units "
-            f"and total revenue is "
+            f"{metrics['total_quantity']} "
+            f"units and total revenue is "
             f"{money(metrics['total_revenue'])}."
         )
 
@@ -2704,11 +3092,39 @@ def build_business_answer(
 
             f"Your total business revenue is "
             f"{money(metrics['total_revenue'])}. "
+
             f"You have "
             f"{metrics['total_sales']} "
             f"sales/orders with an average "
             f"order value of "
             f"{money(metrics['average_order'])}."
+        )
+
+
+    # =================================================
+    # GENERIC SALES / ORDERS
+    # =================================================
+
+    if contains_any(
+
+        q,
+
+        [
+            "sales",
+            "orders",
+        ],
+    ):
+
+        return (
+
+            f"You currently have "
+            f"{metrics['total_sales']} "
+            f"sales/orders. "
+
+            f"Total quantity sold is "
+            f"{metrics['total_quantity']} "
+            f"units and total revenue is "
+            f"{money(metrics['total_revenue'])}."
         )
 
 
@@ -2759,16 +3175,13 @@ def build_business_answer(
     # GEMINI FALLBACK
     # =================================================
 
-    gemini_answer = (
+    gemini_answer = get_gemini_answer(
 
-        get_gemini_answer(
+        question,
 
-            question,
+        user_details,
 
-            user_details,
-
-            metrics,
-        )
+        metrics,
     )
 
 
@@ -2778,19 +3191,24 @@ def build_business_answer(
 
 
     # =================================================
-    # GEMINI NOT CONFIGURED FALLBACK
+    # SAFE LOCAL FALLBACK
     # =================================================
 
     return (
 
         f"I'm your Enterprise AI Business "
         f"Copilot, {name}. "
+
         f"I can help with sales, revenue, "
-        f"customers, products, date-wise "
-        f"performance, forecasts, risks "
-        f"and recommendations. "
-        f"For general mini-chat responses, "
-        f"configure the Gemini API key."
+        f"customers, products, categories, "
+        f"date-wise performance, ML forecasts, "
+        f"risks and recommendations. "
+
+        f"Try asking "
+        f"'Which product should I focus on?', "
+        f"'What is my next 7 days sales forecast?', "
+        f"or "
+        f"'Give me a business recommendation.'"
     )
 
 
@@ -2798,7 +3216,9 @@ def build_business_answer(
 # CHAT API
 # =====================================================
 
-@router.post("/chat")
+@router.post(
+    "/chat"
+)
 def ai_chat(
 
     request: ChatRequest,
@@ -2812,8 +3232,8 @@ def ai_chat(
     ),
 ):
 
-
     message = (
+
         request.message
         .strip()
     )
@@ -2830,16 +3250,13 @@ def ai_chat(
         )
 
 
-    answer = (
+    answer = build_business_answer(
 
-        build_business_answer(
+        message,
 
-            message,
+        db,
 
-            db,
-
-            current_user,
-        )
+        current_user,
     )
 
 

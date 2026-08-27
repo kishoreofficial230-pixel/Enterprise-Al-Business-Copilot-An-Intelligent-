@@ -1,112 +1,1023 @@
-import {
-  useEffect,
-  useState,
-} from "react";
-
+import { useEffect, useMemo, useState } from "react";
 import "./App.css";
-
 
 const API_URL =
   import.meta.env.VITE_API_URL || "http://127.0.0.1:8000";
 
+const money = (value) =>
+  Number(value || 0).toLocaleString("en-IN", {
+    style: "currency",
+    currency: "INR",
+    maximumFractionDigits: 2,
+  });
 
-/* =====================================================
-   HELPERS
-===================================================== */
+const dateText = (value) => {
+  if (!value) return "N/A";
 
-const formatMoney = (value) => {
-  return Number(
-    value || 0
-  ).toLocaleString(
-    "en-IN",
-    {
-      style: "currency",
-      currency: "INR",
-      maximumFractionDigits: 2,
+  const d = new Date(value);
+
+  return Number.isNaN(d.getTime())
+    ? String(value)
+    : d.toLocaleDateString("en-IN");
+};
+
+const saleDate = (sale) => {
+  const raw =
+    sale?.sale_date ||
+    sale?.created_at ||
+    sale?.date;
+
+  if (!raw) return null;
+
+  const d = new Date(raw);
+
+  return Number.isNaN(d.getTime())
+    ? null
+    : d;
+};
+
+const customerDate = (customer) => {
+  const raw =
+    customer?.created_at ||
+    customer?.join_date ||
+    customer?.date;
+
+  if (!raw) return null;
+
+  const d = new Date(raw);
+
+  return Number.isNaN(d.getTime())
+    ? null
+    : d;
+};
+
+const alertIcon = (type) =>
+  type === "RISK"
+    ? "⚠️"
+    : type === "OPPORTUNITY"
+      ? "🚀"
+      : "ℹ️";
+
+const severityIcon = (severity) =>
+  severity === "HIGH"
+    ? "🔴"
+    : severity === "MEDIUM"
+      ? "🟠"
+      : "🟢";
+
+const PRODUCT_IMAGES = {
+  laptop:
+    "https://images.unsplash.com/photo-1496181133206-80ce9b88a853?auto=format&fit=crop&w=640&q=80",
+
+  phone:
+    "https://images.unsplash.com/photo-1511707171634-5f897ff02aa9?auto=format&fit=crop&w=640&q=80",
+
+  smartphone:
+    "https://images.unsplash.com/photo-1511707171634-5f897ff02aa9?auto=format&fit=crop&w=640&q=80",
+
+  tshirt:
+    "https://images.unsplash.com/photo-1521572163474-6864f9cf17ab?auto=format&fit=crop&w=640&q=80",
+
+  shirt:
+    "https://images.unsplash.com/photo-1521572163474-6864f9cf17ab?auto=format&fit=crop&w=640&q=80",
+
+  tv:
+    "https://images.unsplash.com/photo-1593359677879-a4bb92f829d1?auto=format&fit=crop&w=640&q=80",
+
+  television:
+    "https://images.unsplash.com/photo-1593359677879-a4bb92f829d1?auto=format&fit=crop&w=640&q=80",
+
+  washing:
+    "https://images.unsplash.com/photo-1626806787461-102c1bfaaea1?auto=format&fit=crop&w=640&q=80",
+};
+
+const FALLBACK_PRODUCT_IMAGE =
+  "https://images.unsplash.com/photo-1472851294608-062f824d29cc?auto=format&fit=crop&w=640&q=80";
+
+const productImage = (
+  name = ""
+) => {
+
+  const key =
+    String(name)
+      .toLowerCase()
+      .replace(
+        /[^a-z0-9]/g,
+        ""
+      );
+
+  const found =
+    Object.keys(
+      PRODUCT_IMAGES
+    ).find(
+      (item) =>
+        key.includes(
+          item
+        )
+    );
+
+  return found
+    ? PRODUCT_IMAGES[
+        found
+      ]
+    : FALLBACK_PRODUCT_IMAGE;
+};
+
+const filterSales = (
+  sales,
+  range
+) => {
+
+  if (
+    range === "all"
+  ) {
+    return [
+      ...sales,
+    ];
+  }
+
+  const now =
+    new Date();
+
+  const start =
+    new Date(
+      now
+    );
+
+  start.setHours(
+    0,
+    0,
+    0,
+    0
+  );
+
+  if (
+    range === "7"
+  ) {
+
+    start.setDate(
+      start.getDate() -
+      6
+    );
+  }
+
+  if (
+    range === "30"
+  ) {
+
+    start.setDate(
+      start.getDate() -
+      29
+    );
+  }
+
+  return sales.filter(
+    (sale) => {
+
+      const d =
+        saleDate(
+          sale
+        );
+
+      if (!d) {
+        return false;
+      }
+
+      if (
+        range ===
+        "today"
+      ) {
+
+        return (
+          d.getFullYear() ===
+            now.getFullYear() &&
+          d.getMonth() ===
+            now.getMonth() &&
+          d.getDate() ===
+            now.getDate()
+        );
+      }
+
+      return (
+        d >= start &&
+        d <= now
+      );
     }
   );
 };
 
+const revenueTrend = (
+  sales,
+  range
+) => {
 
-const formatDate = (value) => {
+  const map = {};
 
-  if (!value) {
-    return "N/A";
-  }
+  const monthly =
+    range === "all" &&
+    sales.length >
+      35;
 
-  const date = new Date(value);
+  sales.forEach(
+    (sale) => {
+
+      const d =
+        saleDate(
+          sale
+        );
+
+      if (!d) {
+        return;
+      }
+
+      const key =
+        monthly
+          ? `${
+              d.getFullYear()
+            }-${String(
+              d.getMonth() +
+                1
+            ).padStart(
+              2,
+              "0"
+            )}`
+          : `${
+              d.getFullYear()
+            }-${String(
+              d.getMonth() +
+                1
+            ).padStart(
+              2,
+              "0"
+            )}-${String(
+              d.getDate()
+            ).padStart(
+              2,
+              "0"
+            )}`;
+
+      map[key] =
+        (
+          map[key] ||
+          0
+        ) +
+        Number(
+          sale.amount ||
+          0
+        );
+    }
+  );
+
+  return Object.entries(
+    map
+  )
+    .sort(
+      (
+        [a],
+        [b]
+      ) =>
+        a.localeCompare(
+          b
+        )
+    )
+    .slice(
+      -14
+    )
+    .map(
+      (
+        [
+          date,
+          revenue,
+        ]
+      ) => ({
+        date,
+        revenue,
+      })
+    );
+};
+
+const topProducts = (
+  sales
+) => {
+
+  const map = {};
+
+  sales.forEach(
+    (sale) => {
+
+      const name =
+        sale.product_name ||
+        "Unknown Product";
+
+      if (
+        !map[name]
+      ) {
+
+        map[name] = {
+          name,
+
+          category:
+            sale.category ||
+            "Uncategorized",
+
+          revenue: 0,
+
+          quantity: 0,
+        };
+      }
+
+      map[
+        name
+      ].revenue +=
+        Number(
+          sale.amount ||
+          0
+        );
+
+      map[
+        name
+      ].quantity +=
+        Number(
+          sale.quantity ||
+          0
+        );
+    }
+  );
+
+  return Object.values(
+    map
+  )
+    .sort(
+      (
+        a,
+        b
+      ) =>
+        b.revenue -
+        a.revenue
+    )
+    .slice(
+      0,
+      4
+    );
+};
+
+const categoryMix = (
+  sales
+) => {
+
+  const map = {};
+
+  sales.forEach(
+    (sale) => {
+
+      const category =
+        sale.category ||
+        "Other";
+
+      map[
+        category
+      ] =
+        (
+          map[
+            category
+          ] ||
+          0
+        ) +
+        Number(
+          sale.amount ||
+          0
+        );
+    }
+  );
+
+  const total =
+    Object.values(
+      map
+    ).reduce(
+      (
+        sum,
+        value
+      ) =>
+        sum +
+        value,
+      0
+    );
+
+  return Object.entries(
+    map
+  )
+    .sort(
+      (
+        a,
+        b
+      ) =>
+        b[1] -
+        a[1]
+    )
+    .slice(
+      0,
+      5
+    )
+    .map(
+      (
+        [
+          category,
+          revenue,
+        ]
+      ) => ({
+        category,
+
+        revenue,
+
+        percentage:
+          total
+            ? (
+                revenue /
+                total
+              ) *
+              100
+            : 0,
+      })
+    );
+};
+
+const previousPeriodChange =
+  (
+    allSales,
+    range,
+    field =
+      "revenue"
+  ) => {
+
+    if (
+      range ===
+      "all"
+    ) {
+      return null;
+    }
+
+    const days =
+      range ===
+      "today"
+        ? 1
+        : Number(
+            range
+          );
+
+    const now =
+      new Date();
+
+    const currentStart =
+      new Date(
+        now
+      );
+
+    currentStart.setHours(
+      0,
+      0,
+      0,
+      0
+    );
+
+    currentStart.setDate(
+      currentStart.getDate() -
+      (
+        days -
+        1
+      )
+    );
+
+    const previousEnd =
+      new Date(
+        currentStart.getTime() -
+        1
+      );
+
+    const previousStart =
+      new Date(
+        currentStart
+      );
+
+    previousStart.setDate(
+      previousStart.getDate() -
+      days
+    );
+
+    const metric =
+      (
+        from,
+        to
+      ) => {
+
+        const rows =
+          allSales.filter(
+            (sale) => {
+
+              const d =
+                saleDate(
+                  sale
+                );
+
+              return (
+                d &&
+                d >= from &&
+                d <= to
+              );
+            }
+          );
+
+        if (
+          field ===
+          "orders"
+        ) {
+
+          return rows.length;
+        }
+
+        return rows.reduce(
+          (
+            sum,
+            sale
+          ) =>
+            sum +
+            Number(
+              sale.amount ||
+              0
+            ),
+          0
+        );
+      };
+
+    const current =
+      metric(
+        currentStart,
+        now
+      );
+
+    const previous =
+      metric(
+        previousStart,
+        previousEnd
+      );
+
+    if (
+      !previous
+    ) {
+
+      return current
+        ? 100
+        : 0;
+    }
+
+    return (
+      (
+        current -
+        previous
+      ) /
+      previous
+    ) *
+      100;
+  };
+
+const trendLabel = (
+  value
+) => {
 
   if (
-    Number.isNaN(
-      date.getTime()
-    )
+    value === null ||
+    value ===
+      undefined
   ) {
-    return value;
+
+    return "All-time total";
   }
 
-  return date.toLocaleDateString(
-    "en-IN"
+  const direction =
+    value > 0
+      ? "↑"
+      : value < 0
+        ? "↓"
+        : "•";
+
+  return `${direction} ${Math.abs(
+    value
+  ).toFixed(
+    1
+  )}% vs previous period`;
+};
+
+function RevenueChart({
+  data = [],
+}) {
+
+  if (
+    !data.length
+  ) {
+
+    return (
+      <div className="premium-empty-chart">
+
+        <span>
+          📈
+        </span>
+
+        <strong>
+          No revenue data for this period
+        </strong>
+
+        <small>
+          Choose a wider range or add sales.
+        </small>
+
+      </div>
+    );
+  }
+
+  const width =
+    820;
+
+  const height =
+    270;
+
+  const left =
+    64;
+
+  const right =
+    22;
+
+  const top =
+    24;
+
+  const bottom =
+    46;
+
+  const plotW =
+    width -
+    left -
+    right;
+
+  const plotH =
+    height -
+    top -
+    bottom;
+
+  const max =
+    Math.max(
+      ...data.map(
+        (
+          item
+        ) =>
+          Number(
+            item.revenue ||
+            0
+          )
+      ),
+      1
+    );
+
+  const x =
+    (
+      index
+    ) =>
+      left +
+      (
+        index /
+        Math.max(
+          data.length -
+            1,
+          1
+        )
+      ) *
+      plotW;
+
+  const y =
+    (
+      value
+    ) =>
+      top +
+      plotH -
+      (
+        Number(
+          value
+        ) /
+        max
+      ) *
+      plotH;
+
+  const points =
+    data
+      .map(
+        (
+          item,
+          index
+        ) =>
+          `${x(
+            index
+          )},${y(
+            item.revenue
+          )}`
+      )
+      .join(
+        " "
+      );
+
+  const area =
+    `${left},${
+      top +
+      plotH
+    } ${points} ${x(
+      data.length -
+        1
+    )},${
+      top +
+      plotH
+    }`;
+
+  const label =
+    (
+      value
+    ) => {
+
+      const monthOnly =
+        String(
+          value
+        ).length ===
+        7;
+
+      const d =
+        new Date(
+          monthOnly
+            ? `${value}-01T00:00:00`
+            : `${value}T00:00:00`
+        );
+
+      if (
+        Number.isNaN(
+          d.getTime()
+        )
+      ) {
+
+        return value;
+      }
+
+      return d.toLocaleDateString(
+        "en-IN",
+        monthOnly
+          ? {
+              month:
+                "short",
+
+              year:
+                "2-digit",
+            }
+          : {
+              day:
+                "2-digit",
+
+              month:
+                "short",
+            }
+      );
+    };
+
+  return (
+
+    <div className="premium-revenue-chart-wrap">
+
+      <svg
+        className="premium-revenue-chart"
+        viewBox={`0 0 ${width} ${height}`}
+      >
+
+        <defs>
+
+          <linearGradient
+            id="revenueArea"
+            x1="0"
+            x2="0"
+            y1="0"
+            y2="1"
+          >
+
+            <stop
+              offset="0%"
+              stopColor="#6366f1"
+              stopOpacity="0.3"
+            />
+
+            <stop
+              offset="100%"
+              stopColor="#6366f1"
+              stopOpacity="0.02"
+            />
+
+          </linearGradient>
+
+        </defs>
+
+
+        {
+          [
+            0,
+            0.25,
+            0.5,
+            0.75,
+            1,
+          ].map(
+            (
+              ratio
+            ) => {
+
+              const gy =
+                top +
+                plotH -
+                ratio *
+                plotH;
+
+              return (
+
+                <g
+                  key={
+                    ratio
+                  }
+                >
+
+                  <line
+                    x1={
+                      left
+                    }
+                    x2={
+                      width -
+                      right
+                    }
+                    y1={
+                      gy
+                    }
+                    y2={
+                      gy
+                    }
+                    className="premium-chart-grid"
+                  />
+
+                  <text
+                    x="5"
+                    y={
+                      gy +
+                      4
+                    }
+                    className="premium-chart-text"
+                  >
+                    ₹
+                    {
+                      Math.round(
+                        (
+                          max *
+                          ratio
+                        ) /
+                        1000
+                      )
+                    }
+                    k
+                  </text>
+
+                </g>
+              );
+            }
+          )
+        }
+
+
+        <polygon
+          points={
+            area
+          }
+          fill="url(#revenueArea)"
+        />
+
+
+        <polyline
+          points={
+            points
+          }
+          className="premium-chart-line"
+        />
+
+
+        {
+          data.map(
+            (
+              item,
+              index
+            ) => (
+
+              <g
+                key={`${item.date}-${index}`}
+              >
+
+                <circle
+                  cx={
+                    x(
+                      index
+                    )
+                  }
+                  cy={
+                    y(
+                      item.revenue
+                    )
+                  }
+                  r="4.5"
+                  className="premium-chart-point"
+                >
+
+                  <title>
+                    {
+                      `${item.date}: ${money(
+                        item.revenue
+                      )}`
+                    }
+                  </title>
+
+                </circle>
+
+
+                {
+                  (
+                    data.length <=
+                      8 ||
+                    index ===
+                      0 ||
+                    index ===
+                      data.length -
+                      1 ||
+                    index %
+                      2 ===
+                      0
+                  ) &&
+                  (
+
+                    <text
+                      x={
+                        x(
+                          index
+                        )
+                      }
+                      y={
+                        height -
+                        15
+                      }
+                      textAnchor="middle"
+                      className="premium-chart-text"
+                    >
+                      {
+                        label(
+                          item.date
+                        )
+                      }
+                    </text>
+
+                  )
+                }
+
+              </g>
+            )
+          )
+        }
+
+      </svg>
+
+    </div>
   );
-};
+}
 
-
-const getSeverityIcon = (
-  severity
-) => {
-
-  if (severity === "HIGH") {
-    return "🔴";
-  }
-
-  if (severity === "MEDIUM") {
-    return "🟠";
-  }
-
-  return "🟢";
-};
-
-
-const getAlertIcon = (
-  type
-) => {
-
-  if (type === "RISK") {
-    return "⚠️";
-  }
-
-  if (type === "OPPORTUNITY") {
-    return "🚀";
-  }
-
-  return "ℹ️";
-};
-
-
-/* =====================================================
-   FORECAST CHART
-===================================================== */
-
-function RevenueForecastChart({
+function ForecastChart({
   historical = [],
   forecast = [],
 }) {
 
-  const actualPoints =
+  const actual =
     historical.map(
-      (item) => ({
-        date: item.date,
+      (
+        item
+      ) => ({
+        date:
+          item.date,
+
         value:
           Number(
-            item.revenue || 0
+            item.revenue ||
+            0
           ),
       })
     );
 
-
-  const forecastPoints =
+  const predicted =
     forecast.map(
-      (item) => ({
-        date: item.date,
+      (
+        item
+      ) => ({
+        date:
+          item.date,
+
         value:
           Number(
             item.predicted_revenue ||
@@ -115,15 +1026,13 @@ function RevenueForecastChart({
       })
     );
 
-
-  const allPoints = [
-    ...actualPoints,
-    ...forecastPoints,
+  const all = [
+    ...actual,
+    ...predicted,
   ];
 
-
   if (
-    allPoints.length === 0
+    !all.length
   ) {
 
     return (
@@ -133,149 +1042,128 @@ function RevenueForecastChart({
     );
   }
 
+  const width =
+    1000;
 
-  const width = 1000;
+  const height =
+    340;
 
-  const height = 340;
+  const left =
+    70;
 
-  const paddingLeft = 70;
+  const right =
+    30;
 
-  const paddingRight = 30;
+  const top =
+    30;
 
-  const paddingTop = 30;
+  const bottom =
+    65;
 
-  const paddingBottom = 65;
-
-
-  const values =
-    allPoints.map(
-      (item) => item.value
-    );
-
-
-  const maxValue =
-    Math.max(
-      ...values,
-      1
-    );
-
-
-  const plotWidth =
+  const w =
     width -
-    paddingLeft -
-    paddingRight;
+    left -
+    right;
 
-
-  const plotHeight =
+  const h =
     height -
-    paddingTop -
-    paddingBottom;
+    top -
+    bottom;
 
-
-  const pointCount =
+  const max =
     Math.max(
-      allPoints.length - 1,
+      ...all.map(
+        (
+          item
+        ) =>
+          item.value
+      ),
       1
     );
 
-
-  const getX = (
-    index
-  ) => {
-
-    return (
-      paddingLeft +
+  const x =
+    (
+      index
+    ) =>
+      left +
       (
         index /
-        pointCount
+        Math.max(
+          all.length -
+            1,
+          1
+        )
       ) *
-      plotWidth
-    );
-  };
+      w;
 
-
-  const getY = (
-    value
-  ) => {
-
-    return (
-      paddingTop +
-      plotHeight -
+  const y =
+    (
+      value
+    ) =>
+      top +
+      h -
       (
-        value /
-        maxValue
+        Number(
+          value
+        ) /
+        max
       ) *
-      plotHeight
-    );
-  };
+      h;
 
-
-  const actualCoordinates =
-    actualPoints
+  const actualPoints =
+    actual
       .map(
         (
           item,
           index
         ) =>
-          `${getX(index)},${getY(
+          `${x(
+            index
+          )},${y(
             item.value
           )}`
       )
-      .join(" ");
+      .join(
+        " "
+      );
 
-
-  const forecastStartIndex =
-    actualPoints.length;
-
-
-  const forecastCoordinates = [];
+  const predictedPoints =
+    [];
 
   if (
-    actualPoints.length > 0 &&
-    forecastPoints.length > 0
+    actual.length &&
+    predicted.length
   ) {
 
-    const lastActual =
-      actualPoints[
-        actualPoints.length - 1
-      ];
-
-    forecastCoordinates.push(
-      `${getX(
-        actualPoints.length - 1
-      )},${getY(
-        lastActual.value
+    predictedPoints.push(
+      `${x(
+        actual.length -
+        1
+      )},${y(
+        actual[
+          actual.length -
+          1
+        ].value
       )}`
     );
   }
 
-
-  forecastPoints.forEach(
+  predicted.forEach(
     (
       item,
       index
     ) => {
 
-      forecastCoordinates.push(
-        `${getX(
-          forecastStartIndex +
+      predictedPoints.push(
+        `${x(
+          actual.length +
           index
-        )},${getY(
+        )},${y(
           item.value
         )}`
       );
     }
   );
-
-
-  const gridValues = [
-    0,
-    0.25,
-    0.5,
-    0.75,
-    1,
-  ];
-
 
   return (
 
@@ -284,51 +1172,67 @@ function RevenueForecastChart({
       <svg
         className="forecast-chart"
         viewBox={`0 0 ${width} ${height}`}
-        role="img"
-        aria-label="Historical and predicted revenue chart"
       >
 
         {
-          gridValues.map(
+          [
+            0,
+            0.25,
+            0.5,
+            0.75,
+            1,
+          ].map(
             (
-              ratio,
-              index
+              ratio
             ) => {
 
-              const y =
-                paddingTop +
-                plotHeight -
+              const gy =
+                top +
+                h -
                 ratio *
-                plotHeight;
-
-              const value =
-                maxValue *
-                ratio;
+                h;
 
               return (
 
-                <g key={index}>
+                <g
+                  key={
+                    ratio
+                  }
+                >
 
                   <line
-                    x1={paddingLeft}
-                    y1={y}
+                    x1={
+                      left
+                    }
                     x2={
                       width -
-                      paddingRight
+                      right
                     }
-                    y2={y}
+                    y1={
+                      gy
+                    }
+                    y2={
+                      gy
+                    }
                     className="chart-grid-line"
                   />
 
                   <text
                     x="5"
-                    y={y + 5}
+                    y={
+                      gy +
+                      5
+                    }
                     className="chart-axis-text"
                   >
                     ₹
                     {
                       Math.round(
-                        value / 1000
+                        (
+                          max *
+                          ratio
+                        ) /
+                        1000
                       )
                     }
                     k
@@ -342,36 +1246,40 @@ function RevenueForecastChart({
 
 
         {
-          actualCoordinates &&
+          actualPoints &&
           (
+
             <polyline
               points={
-                actualCoordinates
+                actualPoints
               }
               className="actual-line"
             />
+
           )
         }
 
 
         {
-          forecastCoordinates.length >
+          predictedPoints.length >
             1 &&
           (
+
             <polyline
               points={
-                forecastCoordinates.join(
+                predictedPoints.join(
                   " "
                 )
               }
               className="prediction-line"
             />
+
           )
         }
 
 
         {
-          actualPoints.map(
+          actual.map(
             (
               item,
               index
@@ -379,11 +1287,15 @@ function RevenueForecastChart({
 
               <circle
                 key={
-                  `actual-${index}`
+                  `a-${index}`
                 }
-                cx={getX(index)}
+                cx={
+                  x(
+                    index
+                  )
+                }
                 cy={
-                  getY(
+                  y(
                     item.value
                   )
                 }
@@ -397,93 +1309,90 @@ function RevenueForecastChart({
 
 
         {
-          forecastPoints.map(
+          predicted.map(
             (
               item,
               index
-            ) => {
+            ) => (
 
-              const chartIndex =
-                forecastStartIndex +
-                index;
+              <circle
+                key={
+                  `p-${index}`
+                }
+                cx={
+                  x(
+                    actual.length +
+                    index
+                  )
+                }
+                cy={
+                  y(
+                    item.value
+                  )
+                }
+                r="5"
+                className="prediction-point"
+              />
 
-              return (
-
-                <circle
-                  key={
-                    `forecast-${index}`
-                  }
-                  cx={
-                    getX(
-                      chartIndex
-                    )
-                  }
-                  cy={
-                    getY(
-                      item.value
-                    )
-                  }
-                  r="5"
-                  className="prediction-point"
-                />
-
-              );
-            }
+            )
           )
         }
 
 
         {
-          allPoints.map(
+          all.map(
             (
               item,
               index
-            ) => {
-
-              const showLabel =
-                allPoints.length <= 12 ||
-                index === 0 ||
+            ) =>
+              (
+                all.length <=
+                  12 ||
                 index ===
-                  allPoints.length -
-                    1 ||
-                index % 2 === 0;
+                  0 ||
+                index ===
+                  all.length -
+                  1 ||
+                index %
+                  2 ===
+                  0
+              )
+                ? (
 
-              if (!showLabel) {
-                return null;
-              }
-
-              return (
-
-                <text
-                  key={
-                    `date-${index}`
-                  }
-                  x={
-                    getX(index)
-                  }
-                  y={
-                    height - 24
-                  }
-                  textAnchor="middle"
-                  className="chart-date-text"
-                >
-                  {
-                    new Date(
-                      item.date
-                    ).toLocaleDateString(
-                      "en-IN",
-                      {
-                        day:
-                          "2-digit",
-                        month:
-                          "short",
+                    <text
+                      key={
+                        `d-${index}`
                       }
-                    )
-                  }
-                </text>
+                      x={
+                        x(
+                          index
+                        )
+                      }
+                      y={
+                        height -
+                        24
+                      }
+                      textAnchor="middle"
+                      className="chart-date-text"
+                    >
+                      {
+                        new Date(
+                          item.date
+                        ).toLocaleDateString(
+                          "en-IN",
+                          {
+                            day:
+                              "2-digit",
 
-              );
-            }
+                            month:
+                              "short",
+                          }
+                        )
+                      }
+                    </text>
+
+                  )
+                : null
           )
         }
 
@@ -493,15 +1402,22 @@ function RevenueForecastChart({
       <div className="chart-legend">
 
         <span>
+
           <i className="legend-line actual-legend">
           </i>
+
           Historical Revenue
+
         </span>
 
+
         <span>
+
           <i className="legend-line prediction-legend">
           </i>
+
           ML Predicted Revenue
+
         </span>
 
       </div>
@@ -509,11 +1425,6 @@ function RevenueForecastChart({
     </div>
   );
 }
-
-
-/* =====================================================
-   MAIN APP
-===================================================== */
 
 function App() {
 
@@ -527,32 +1438,37 @@ function App() {
       )
     );
 
-
   const [
     dashboard,
     setDashboard,
   ] =
-    useState(null);
-
+    useState(
+      null
+    );
 
   const [
     dashboardLoading,
     setDashboardLoading,
   ] =
-    useState(false);
-
-
-  const handleLogout = () => {
-
-    localStorage.removeItem(
-      "access_token"
+    useState(
+      false
     );
 
-    setLoggedIn(false);
+  const handleLogout =
+    () => {
 
-    setDashboard(null);
-  };
+      localStorage.removeItem(
+        "access_token"
+      );
 
+      setLoggedIn(
+        false
+      );
+
+      setDashboard(
+        null
+      );
+    };
 
   const loadDashboard =
     async () => {
@@ -562,19 +1478,20 @@ function App() {
           "access_token"
         );
 
+      if (
+        !token
+      ) {
 
-      if (!token) {
-
-        setLoggedIn(false);
+        setLoggedIn(
+          false
+        );
 
         return;
       }
 
-
       setDashboardLoading(
         true
       );
-
 
       try {
 
@@ -589,10 +1506,8 @@ function App() {
             }
           );
 
-
         const data =
           await response.json();
-
 
         if (
           response.status ===
@@ -604,8 +1519,9 @@ function App() {
           return;
         }
 
-
-        if (!response.ok) {
+        if (
+          !response.ok
+        ) {
 
           console.error(
             "Dashboard error:",
@@ -615,10 +1531,13 @@ function App() {
           return;
         }
 
+        setDashboard(
+          data
+        );
 
-        setDashboard(data);
-
-      } catch (error) {
+      } catch (
+        error
+      ) {
 
         console.error(
           "Dashboard connection error:",
@@ -633,30 +1552,37 @@ function App() {
       }
     };
 
+  useEffect(
+    () => {
 
-  useEffect(() => {
+      if (
+        loggedIn
+      ) {
 
-    if (loggedIn) {
+        loadDashboard();
+      }
 
-      loadDashboard();
-    }
+    },
+    [
+      loggedIn,
+    ]
+  );
 
-  }, [loggedIn]);
-
-
-  if (!loggedIn) {
+  if (
+    !loggedIn
+  ) {
 
     return (
-
       <Login
-        onLogin={() =>
-          setLoggedIn(true)
+        onLogin={
+          () =>
+            setLoggedIn(
+              true
+            )
         }
       />
-
     );
   }
-
 
   if (
     dashboardLoading ||
@@ -686,11 +1612,11 @@ function App() {
     );
   }
 
-
   return (
-
     <Dashboard
-      dashboard={dashboard}
+      dashboard={
+        dashboard
+      }
       refreshDashboard={
         loadDashboard
       }
@@ -698,14 +1624,8 @@ function App() {
         handleLogout
       }
     />
-
   );
 }
-
-
-/* =====================================================
-   LOGIN
-===================================================== */
 
 function Login({
   onLogin,
@@ -715,161 +1635,209 @@ function Login({
     email,
     setEmail,
   ] =
-    useState("");
+    useState(
+      ""
+    );
 
   const [
     password,
     setPassword,
   ] =
-    useState("");
+    useState(
+      ""
+    );
 
   const [
     loading,
     setLoading,
   ] =
-    useState(false);
+    useState(
+      false
+    );
 
   const [
     error,
     setError,
   ] =
-    useState("");
+    useState(
+      ""
+    );
 
   const [
     lampOn,
     setLampOn,
   ] =
-    useState(false);
+    useState(
+      false
+    );
 
   const [
     pulling,
     setPulling,
   ] =
-    useState(false);
+    useState(
+      false
+    );
 
   const [
     pullStartY,
     setPullStartY,
   ] =
-    useState(null);
+    useState(
+      null
+    );
 
   const [
     pullDistance,
     setPullDistance,
   ] =
-    useState(0);
-
-
-  const revealLogin = () => {
-
-    if (lampOn) {
-      return;
-    }
-
-    setPullDistance(82);
-
-    window.setTimeout(
-      () => {
-        setLampOn(true);
-
-        window.setTimeout(
-          () => {
-            setPullDistance(0);
-          },
-          260
-        );
-      },
-      120
-    );
-  };
-
-
-  const handlePullStart = (
-    event
-  ) => {
-
-    if (lampOn) {
-      return;
-    }
-
-    setPulling(true);
-
-    setPullStartY(
-      event.clientY
+    useState(
+      0
     );
 
-    setPullDistance(0);
+  const revealLogin =
+    () => {
 
-    try {
-      event.currentTarget
-        .setPointerCapture(
-          event.pointerId
-        );
-    } catch {
-      // Pointer capture is optional.
-    }
-  };
+      if (
+        lampOn
+      ) {
+        return;
+      }
 
-
-  const handlePullMove = (
-    event
-  ) => {
-
-    if (
-      !pulling ||
-      pullStartY === null ||
-      lampOn
-    ) {
-      return;
-    }
-
-    const distance =
-      Math.max(
-        0,
-        Math.min(
-          105,
-          event.clientY -
-            pullStartY
-        )
+      setPullDistance(
+        82
       );
 
-    setPullDistance(
-      distance
-    );
-  };
+      window.setTimeout(
+        () => {
 
+          setLampOn(
+            true
+          );
 
-  const handlePullEnd = (
-    event
-  ) => {
+          window.setTimeout(
+            () =>
+              setPullDistance(
+                0
+              ),
+            260
+          );
 
-    if (!pulling) {
-      return;
-    }
+        },
+        120
+      );
+    };
 
-    try {
-      event.currentTarget
-        .releasePointerCapture(
-          event.pointerId
+  const handlePullStart =
+    (
+      event
+    ) => {
+
+      if (
+        lampOn
+      ) {
+        return;
+      }
+
+      setPulling(
+        true
+      );
+
+      setPullStartY(
+        event.clientY
+      );
+
+      setPullDistance(
+        0
+      );
+
+      try {
+
+        event.currentTarget
+          .setPointerCapture(
+            event.pointerId
+          );
+
+      } catch {
+
+        // Optional pointer capture.
+      }
+    };
+
+  const handlePullMove =
+    (
+      event
+    ) => {
+
+      if (
+        !pulling ||
+        pullStartY ===
+          null ||
+        lampOn
+      ) {
+        return;
+      }
+
+      setPullDistance(
+        Math.max(
+          0,
+          Math.min(
+            105,
+            event.clientY -
+              pullStartY
+          )
+        )
+      );
+    };
+
+  const handlePullEnd =
+    (
+      event
+    ) => {
+
+      if (
+        !pulling
+      ) {
+        return;
+      }
+
+      try {
+
+        event.currentTarget
+          .releasePointerCapture(
+            event.pointerId
+          );
+
+      } catch {
+
+        // Pointer may already be released.
+      }
+
+      const shouldTurnOn =
+        pullDistance >=
+        52;
+
+      setPulling(
+        false
+      );
+
+      setPullStartY(
+        null
+      );
+
+      if (
+        shouldTurnOn
+      ) {
+
+        revealLogin();
+
+      } else {
+
+        setPullDistance(
+          0
         );
-    } catch {
-      // Pointer may already be released.
-    }
-
-    const shouldTurnOn =
-      pullDistance >= 52;
-
-    setPulling(false);
-
-    setPullStartY(null);
-
-    if (shouldTurnOn) {
-      revealLogin();
-    } else {
-      setPullDistance(0);
-    }
-  };
-
+      }
+    };
 
   const handleLogin =
     async (
@@ -878,9 +1846,13 @@ function Login({
 
       event.preventDefault();
 
-      setLoading(true);
+      setLoading(
+        true
+      );
 
-      setError("");
+      setError(
+        ""
+      );
 
       try {
 
@@ -926,10 +1898,12 @@ function Login({
 
         onLogin();
 
-      } catch (error) {
+      } catch (
+        err
+      ) {
 
         console.error(
-          error
+          err
         );
 
         setError(
@@ -938,10 +1912,11 @@ function Login({
 
       } finally {
 
-        setLoading(false);
+        setLoading(
+          false
+        );
       }
     };
-
 
   return (
 
@@ -984,13 +1959,17 @@ function Login({
           </div>
 
           <div className="lamp-shade">
+
             <div className="lamp-shade-rim">
             </div>
+
           </div>
 
           <div className="lamp-bulb">
+
             <span>
             </span>
+
           </div>
 
         </div>
@@ -1036,10 +2015,13 @@ function Login({
               handlePullEnd
             }
             onClick={() => {
+
               if (
                 !lampOn &&
-                pullDistance < 10
+                pullDistance <
+                  10
               ) {
+
                 revealLogin();
               }
             }}
@@ -1048,11 +2030,13 @@ function Login({
               lampOn
             }
           >
+
             <span className="pull-knob-top">
             </span>
 
             <span className="pull-knob-body">
             </span>
+
           </button>
 
         </div>
@@ -1083,13 +2067,14 @@ function Login({
           </h2>
 
           <p>
-            Analytics, forecasting and
-            intelligent decision support.
+            Analytics, forecasting and intelligent decision support.
           </p>
+
 
           {
             !lampOn &&
             (
+
               <div className="pull-instruction">
 
                 <span className="pull-arrow">
@@ -1097,6 +2082,7 @@ function Login({
                 </span>
 
                 <div>
+
                   <strong>
                     Pull the cord
                   </strong>
@@ -1104,6 +2090,7 @@ function Login({
                   <small>
                     to switch on your workspace
                   </small>
+
                 </div>
 
               </div>
@@ -1144,8 +2131,7 @@ function Login({
           </h1>
 
           <p className="lamp-login-subtitle">
-            Sign in to Enterprise AI
-            Business Copilot
+            Sign in to Enterprise AI Business Copilot
           </p>
 
 
@@ -1232,9 +2218,13 @@ function Login({
             {
               error &&
               (
+
                 <div className="lamp-error-message">
-                  {error}
+                  {
+                    error
+                  }
                 </div>
+
               )
             }
 
@@ -1252,19 +2242,23 @@ function Login({
                 loading
                   ? (
                     <>
+
                       <span className="lamp-button-spinner">
                       </span>
 
                       Signing In...
+
                     </>
                   )
                   : (
                     <>
+
                       Enter Dashboard
 
                       <span className="lamp-login-arrow">
                         →
                       </span>
+
                     </>
                   )
               }
@@ -1291,10 +2285,6 @@ function Login({
   );
 }
 
-/* =====================================================
-   DASHBOARD COMPONENT
-===================================================== */
-
 function Dashboard({
   dashboard,
   refreshDashboard,
@@ -1309,146 +2299,187 @@ function Dashboard({
       "dashboard"
     );
 
+  const [
+    theme,
+    setTheme,
+  ] =
+    useState(
+      () =>
+        localStorage.getItem(
+          "dashboard_theme"
+        ) ||
+        "light"
+    );
 
-  /* =====================================================
-     CUSTOMERS STATE
-  ===================================================== */
+  const [
+    sidebarCollapsed,
+    setSidebarCollapsed,
+  ] =
+    useState(
+      false
+    );
+
+  const [
+    range,
+    setRange,
+  ] =
+    useState(
+      "30"
+    );
+
+  const [
+    notificationOpen,
+    setNotificationOpen,
+  ] =
+    useState(
+      false
+    );
+
 
   const [
     customers,
     setCustomers,
   ] =
-    useState([]);
-
+    useState(
+      []
+    );
 
   const [
     customerLoading,
     setCustomerLoading,
   ] =
-    useState(false);
-
+    useState(
+      false
+    );
 
   const [
     showAddCustomer,
     setShowAddCustomer,
   ] =
-    useState(false);
-
+    useState(
+      false
+    );
 
   const [
     customerForm,
     setCustomerForm,
   ] =
     useState({
-      full_name: "",
-      email: "",
-      phone: "",
-      status: "Active",
+      full_name:
+        "",
+
+      email:
+        "",
+
+      phone:
+        "",
+
+      status:
+        "Active",
     });
 
-
-  /* =====================================================
-     SALES STATE
-  ===================================================== */
 
   const [
     sales,
     setSales,
   ] =
-    useState([]);
-
+    useState(
+      []
+    );
 
   const [
     salesLoading,
     setSalesLoading,
   ] =
-    useState(false);
-
+    useState(
+      false
+    );
 
   const [
     showAddSale,
     setShowAddSale,
   ] =
-    useState(false);
-
+    useState(
+      false
+    );
 
   const [
     saleForm,
     setSaleForm,
   ] =
     useState({
-      product_name: "",
-      category: "",
-      quantity: 1,
-      amount: "",
-      customer_name: "",
+      product_name:
+        "",
+
+      category:
+        "",
+
+      quantity:
+        1,
+
+      amount:
+        "",
+
+      customer_name:
+        "",
     });
 
-
-  /* =====================================================
-     ANALYTICS STATE
-  ===================================================== */
 
   const [
     analytics,
     setAnalytics,
   ] =
-    useState(null);
-
+    useState(
+      null
+    );
 
   const [
     analyticsLoading,
     setAnalyticsLoading,
   ] =
-    useState(false);
-
-
-  /* =====================================================
-     FORECAST STATE
-  ===================================================== */
+    useState(
+      false
+    );
 
   const [
     forecastData,
     setForecastData,
   ] =
-    useState(null);
-
+    useState(
+      null
+    );
 
   const [
     forecastLoading,
     setForecastLoading,
   ] =
-    useState(false);
-
-
-  /* =====================================================
-     ALERT STATE
-  ===================================================== */
+    useState(
+      false
+    );
 
   const [
     alertData,
     setAlertData,
   ] =
-    useState(null);
-
+    useState(
+      null
+    );
 
   const [
     alertsLoading,
     setAlertsLoading,
   ] =
-    useState(false);
-
+    useState(
+      false
+    );
 
   const [
     alertsError,
     setAlertsError,
   ] =
-    useState("");
-
-
-  /* =====================================================
-     COPILOT STATE
-  ===================================================== */
+    useState(
+      ""
+    );
 
   const [
     chatMessages,
@@ -1464,28 +2495,41 @@ function Dashboard({
       },
     ]);
 
-
   const [
     chatInput,
     setChatInput,
   ] =
-    useState("");
-
+    useState(
+      ""
+    );
 
   const [
     chatLoading,
     setChatLoading,
   ] =
-    useState(false);
+    useState(
+      false
+    );
 
 
-  /* =====================================================
-     AUTH FETCH HELPER
-  ===================================================== */
+  useEffect(
+    () => {
+
+      localStorage.setItem(
+        "dashboard_theme",
+        theme
+      );
+
+    },
+    [
+      theme,
+    ]
+  );
+
 
   const authFetch =
     async (
-      url,
+      path,
       options = {}
     ) => {
 
@@ -1494,10 +2538,9 @@ function Dashboard({
           "access_token"
         );
 
-
       const response =
         await fetch(
-          `${API_URL}${url}`,
+          `${API_URL}${path}`,
           {
             ...options,
 
@@ -1513,7 +2556,6 @@ function Dashboard({
           }
         );
 
-
       if (
         response.status ===
         401
@@ -1526,26 +2568,295 @@ function Dashboard({
         );
       }
 
-
       return response;
     };
 
 
-  /* =====================================================
-     ALERTS
-  ===================================================== */
+  const fetchSalesData =
+    async (
+      openPage =
+        false
+    ) => {
+
+      setSalesLoading(
+        true
+      );
+
+      try {
+
+        const response =
+          await authFetch(
+            "/sales/"
+          );
+
+        const data =
+          await response.json();
+
+        if (
+          !response.ok
+        ) {
+
+          throw new Error(
+            data.detail ||
+            "Unable to fetch sales"
+          );
+        }
+
+        setSales(
+          Array.isArray(
+            data
+          )
+            ? data
+            : []
+        );
+
+        if (
+          openPage
+        ) {
+
+          setPage(
+            "sales"
+          );
+        }
+
+        return Array.isArray(
+          data
+        )
+          ? data
+          : [];
+
+      } catch (
+        error
+      ) {
+
+        if (
+          error.message !==
+          "Session expired"
+        ) {
+
+          console.error(
+            error
+          );
+        }
+
+        return [];
+
+      } finally {
+
+        setSalesLoading(
+          false
+        );
+      }
+    };
+
+
+  const fetchCustomersData =
+    async (
+      openPage =
+        false
+    ) => {
+
+      setCustomerLoading(
+        true
+      );
+
+      try {
+
+        const response =
+          await authFetch(
+            "/customers/"
+          );
+
+        const data =
+          await response.json();
+
+        if (
+          !response.ok
+        ) {
+
+          throw new Error(
+            data.detail ||
+            "Unable to fetch customers"
+          );
+        }
+
+        setCustomers(
+          Array.isArray(
+            data
+          )
+            ? data
+            : []
+        );
+
+        if (
+          openPage
+        ) {
+
+          setPage(
+            "customers"
+          );
+        }
+
+        return Array.isArray(
+          data
+        )
+          ? data
+          : [];
+
+      } catch (
+        error
+      ) {
+
+        if (
+          error.message !==
+          "Session expired"
+        ) {
+
+          console.error(
+            error
+          );
+        }
+
+        return [];
+
+      } finally {
+
+        setCustomerLoading(
+          false
+        );
+      }
+    };
+
+
+  const fetchAnalytics =
+    async () => {
+
+      setAnalyticsLoading(
+        true
+      );
+
+      try {
+
+        const response =
+          await authFetch(
+            "/analytics/overview"
+          );
+
+        const data =
+          await response.json();
+
+        if (
+          !response.ok
+        ) {
+
+          throw new Error(
+            data.detail ||
+            "Unable to fetch analytics"
+          );
+        }
+
+        setAnalytics(
+          data
+        );
+
+        return data;
+
+      } catch (
+        error
+      ) {
+
+        if (
+          error.message !==
+          "Session expired"
+        ) {
+
+          console.error(
+            error
+          );
+        }
+
+        return null;
+
+      } finally {
+
+        setAnalyticsLoading(
+          false
+        );
+      }
+    };
+
+
+  const fetchForecast =
+    async () => {
+
+      setForecastLoading(
+        true
+      );
+
+      try {
+
+        const response =
+          await authFetch(
+            "/forecast/sales"
+          );
+
+        const data =
+          await response.json();
+
+        if (
+          !response.ok
+        ) {
+
+          throw new Error(
+            data.detail ||
+            "Unable to fetch forecast"
+          );
+        }
+
+        setForecastData(
+          data
+        );
+
+        return data;
+
+      } catch (
+        error
+      ) {
+
+        if (
+          error.message !==
+          "Session expired"
+        ) {
+
+          console.error(
+            error
+          );
+        }
+
+        return null;
+
+      } finally {
+
+        setForecastLoading(
+          false
+        );
+      }
+    };
+
 
   const fetchAlerts =
     async (
-      openPage = false
+      openPage =
+        false
     ) => {
 
       setAlertsLoading(
         true
       );
 
-      setAlertsError("");
-
+      setAlertsError(
+        ""
+      );
 
       try {
 
@@ -1554,35 +2865,39 @@ function Dashboard({
             "/alerts/business"
           );
 
-
         const data =
           await response.json();
 
-
-        if (!response.ok) {
+        if (
+          !response.ok
+        ) {
 
           setAlertsError(
             data.detail ||
             "Unable to load AI business alerts"
           );
 
-          return;
+          return null;
         }
-
 
         setAlertData(
           data
         );
 
-
-        if (openPage) {
+        if (
+          openPage
+        ) {
 
           setPage(
             "alerts"
           );
         }
 
-      } catch (error) {
+        return data;
+
+      } catch (
+        error
+      ) {
 
         if (
           error.message !==
@@ -1598,6 +2913,8 @@ function Dashboard({
           );
         }
 
+        return null;
+
       } finally {
 
         setAlertsLoading(
@@ -1607,80 +2924,55 @@ function Dashboard({
     };
 
 
-  useEffect(() => {
-
-    fetchAlerts(false);
-
-  }, []);
-
-
-  /* =====================================================
-     CUSTOMERS
-  ===================================================== */
-
-  const fetchCustomers =
+  const refreshEverything =
     async () => {
 
-      setCustomerLoading(
-        true
-      );
+      await Promise.all([
+        refreshDashboard(),
 
-
-      try {
-
-        const response =
-          await authFetch(
-            "/customers/"
-          );
-
-
-        const data =
-          await response.json();
-
-
-        if (!response.ok) {
-
-          alert(
-            data.detail ||
-            "Unable to fetch customers"
-          );
-
-          return;
-        }
-
-
-        setCustomers(
-          Array.isArray(data)
-            ? data
-            : []
-        );
-
-        setPage(
-          "customers"
-        );
-
-      } catch (error) {
-
-        console.error(
-          error
-        );
-
-      } finally {
-
-        setCustomerLoading(
+        fetchSalesData(
           false
-        );
-      }
+        ),
+
+        fetchCustomersData(
+          false
+        ),
+
+        fetchAlerts(
+          false
+        ),
+      ]);
     };
 
 
-  const handleAddCustomer =
+  useEffect(
+    () => {
+
+      Promise.all([
+        fetchSalesData(
+          false
+        ),
+
+        fetchCustomersData(
+          false
+        ),
+
+        fetchAlerts(
+          false
+        ),
+      ]);
+
+    },
+    []
+  );
+
+
+  const addCustomer =
     async (
       event
     ) => {
 
       event.preventDefault();
-
 
       try {
 
@@ -1703,12 +2995,12 @@ function Dashboard({
             }
           );
 
-
         const data =
           await response.json();
 
-
-        if (!response.ok) {
+        if (
+          !response.ok
+        ) {
 
           alert(
             data.detail ||
@@ -1718,29 +3010,39 @@ function Dashboard({
           return;
         }
 
-
         setCustomerForm({
-          full_name: "",
-          email: "",
-          phone: "",
-          status: "Active",
-        });
+          full_name:
+            "",
 
+          email:
+            "",
+
+          phone:
+            "",
+
+          status:
+            "Active",
+        });
 
         setShowAddCustomer(
           false
         );
 
+        await Promise.all([
+          fetchCustomersData(
+            false
+          ),
 
-        await fetchCustomers();
+          refreshDashboard(),
 
-        await refreshDashboard();
+          fetchAlerts(
+            false
+          ),
+        ]);
 
-        await fetchAlerts(
-          false
-        );
-
-      } catch (error) {
+      } catch (
+        error
+      ) {
 
         console.error(
           error
@@ -1754,16 +3056,14 @@ function Dashboard({
       id
     ) => {
 
-      const confirmed =
-        window.confirm(
+      if (
+        !window.confirm(
           "Are you sure you want to delete this customer?"
-        );
+        )
+      ) {
 
-
-      if (!confirmed) {
         return;
       }
-
 
       try {
 
@@ -1776,12 +3076,15 @@ function Dashboard({
             }
           );
 
+        if (
+          !response.ok
+        ) {
 
-        const data =
-          await response.json();
-
-
-        if (!response.ok) {
+          const data =
+            await response.json()
+              .catch(
+                () => ({})
+              );
 
           alert(
             data.detail ||
@@ -1791,16 +3094,21 @@ function Dashboard({
           return;
         }
 
+        await Promise.all([
+          fetchCustomersData(
+            false
+          ),
 
-        await fetchCustomers();
+          refreshDashboard(),
 
-        await refreshDashboard();
+          fetchAlerts(
+            false
+          ),
+        ]);
 
-        await fetchAlerts(
-          false
-        );
-
-      } catch (error) {
+      } catch (
+        error
+      ) {
 
         console.error(
           error
@@ -1809,74 +3117,12 @@ function Dashboard({
     };
 
 
-  /* =====================================================
-     SALES
-  ===================================================== */
-
-  const fetchSales =
-    async () => {
-
-      setSalesLoading(
-        true
-      );
-
-
-      try {
-
-        const response =
-          await authFetch(
-            "/sales/"
-          );
-
-
-        const data =
-          await response.json();
-
-
-        if (!response.ok) {
-
-          alert(
-            data.detail ||
-            "Unable to fetch sales"
-          );
-
-          return;
-        }
-
-
-        setSales(
-          Array.isArray(data)
-            ? data
-            : []
-        );
-
-
-        setPage(
-          "sales"
-        );
-
-      } catch (error) {
-
-        console.error(
-          error
-        );
-
-      } finally {
-
-        setSalesLoading(
-          false
-        );
-      }
-    };
-
-
-  const handleAddSale =
+  const addSale =
     async (
       event
     ) => {
 
       event.preventDefault();
-
 
       try {
 
@@ -1916,12 +3162,12 @@ function Dashboard({
             }
           );
 
-
         const data =
           await response.json();
 
-
-        if (!response.ok) {
+        if (
+          !response.ok
+        ) {
 
           alert(
             data.detail ||
@@ -1931,30 +3177,42 @@ function Dashboard({
           return;
         }
 
-
         setSaleForm({
-          product_name: "",
-          category: "",
-          quantity: 1,
-          amount: "",
-          customer_name: "",
-        });
+          product_name:
+            "",
 
+          category:
+            "",
+
+          quantity:
+            1,
+
+          amount:
+            "",
+
+          customer_name:
+            "",
+        });
 
         setShowAddSale(
           false
         );
 
+        await Promise.all([
+          fetchSalesData(
+            false
+          ),
 
-        await fetchSales();
+          refreshDashboard(),
 
-        await refreshDashboard();
+          fetchAlerts(
+            false
+          ),
+        ]);
 
-        await fetchAlerts(
-          false
-        );
-
-      } catch (error) {
+      } catch (
+        error
+      ) {
 
         console.error(
           error
@@ -1968,16 +3226,14 @@ function Dashboard({
       id
     ) => {
 
-      const confirmed =
-        window.confirm(
+      if (
+        !window.confirm(
           "Are you sure you want to delete this sale?"
-        );
+        )
+      ) {
 
-
-      if (!confirmed) {
         return;
       }
-
 
       try {
 
@@ -1990,12 +3246,15 @@ function Dashboard({
             }
           );
 
+        if (
+          !response.ok
+        ) {
 
-        const data =
-          await response.json();
-
-
-        if (!response.ok) {
+          const data =
+            await response.json()
+              .catch(
+                () => ({})
+              );
 
           alert(
             data.detail ||
@@ -2005,127 +3264,24 @@ function Dashboard({
           return;
         }
 
+        await Promise.all([
+          fetchSalesData(
+            false
+          ),
 
-        await fetchSales();
+          refreshDashboard(),
 
-        await refreshDashboard();
+          fetchAlerts(
+            false
+          ),
+        ]);
 
-        await fetchAlerts(
-          false
-        );
-
-      } catch (error) {
-
-        console.error(
-          error
-        );
-      }
-    };
-
-
-  /* =====================================================
-     ANALYTICS
-  ===================================================== */
-
-  const fetchAnalytics =
-    async () => {
-
-      setAnalyticsLoading(
-        true
-      );
-
-
-      try {
-
-        const response =
-          await authFetch(
-            "/analytics/overview"
-          );
-
-
-        const data =
-          await response.json();
-
-
-        if (!response.ok) {
-
-          alert(
-            data.detail ||
-            "Unable to fetch analytics"
-          );
-
-          return;
-        }
-
-
-        setAnalytics(
-          data
-        );
-
-      } catch (error) {
+      } catch (
+        error
+      ) {
 
         console.error(
           error
-        );
-
-      } finally {
-
-        setAnalyticsLoading(
-          false
-        );
-      }
-    };
-
-
-  /* =====================================================
-     FORECAST
-  ===================================================== */
-
-  const fetchForecast =
-    async () => {
-
-      setForecastLoading(
-        true
-      );
-
-
-      try {
-
-        const response =
-          await authFetch(
-            "/forecast/sales"
-          );
-
-
-        const data =
-          await response.json();
-
-
-        if (!response.ok) {
-
-          alert(
-            data.detail ||
-            "Unable to fetch forecast"
-          );
-
-          return;
-        }
-
-
-        setForecastData(
-          data
-        );
-
-      } catch (error) {
-
-        console.error(
-          error
-        );
-
-      } finally {
-
-        setForecastLoading(
-          false
         );
       }
     };
@@ -2138,29 +3294,25 @@ function Dashboard({
         "analytics"
       );
 
-
       await Promise.all([
         fetchAnalytics(),
+
         fetchForecast(),
       ]);
     };
 
 
-  /* =====================================================
-     AI COPILOT
-  ===================================================== */
-
   const sendAiMessage =
     async (
-      customQuestion = null
+      customQuestion =
+        null
     ) => {
 
       const question =
-        (
+        String(
           customQuestion ||
           chatInput
         ).trim();
-
 
       if (
         !question ||
@@ -2170,12 +3322,12 @@ function Dashboard({
         return;
       }
 
-
       setChatMessages(
         (
           previous
         ) => [
           ...previous,
+
           {
             role:
               "user",
@@ -2186,13 +3338,13 @@ function Dashboard({
         ]
       );
 
-
-      setChatInput("");
+      setChatInput(
+        ""
+      );
 
       setChatLoading(
         true
       );
-
 
       try {
 
@@ -2216,53 +3368,55 @@ function Dashboard({
             }
           );
 
-
         const data =
           await response.json();
-
-
-        if (!response.ok) {
-
-          setChatMessages(
-            (
-              previous
-            ) => [
-              ...previous,
-              {
-                role:
-                  "assistant",
-
-                content:
-                  data.detail ||
-                  "Unable to get an answer.",
-              },
-            ]
-          );
-
-          return;
-        }
-
 
         setChatMessages(
           (
             previous
           ) => [
             ...previous,
+
             {
               role:
                 "assistant",
 
               content:
-                data.answer ||
-                "No answer available.",
+                response.ok
+                  ? (
+                      data.answer ||
+                      "No answer available."
+                    )
+                  : (
+                      data.detail ||
+                      "Unable to get an answer."
+                    ),
             },
           ]
         );
 
-      } catch (error) {
+      } catch (
+        error
+      ) {
 
         console.error(
           error
+        );
+
+        setChatMessages(
+          (
+            previous
+          ) => [
+            ...previous,
+
+            {
+              role:
+                "assistant",
+
+              content:
+                "AI Copilot is temporarily unavailable.",
+            },
+          ]
         );
 
       } finally {
@@ -2274,46 +3428,414 @@ function Dashboard({
     };
 
 
-  /* =====================================================
-     DASHBOARD PAGE
-  ===================================================== */
+  const filteredSales =
+    useMemo(
+      () =>
+        filterSales(
+          sales,
+          range
+        ),
+      [
+        sales,
+        range,
+      ]
+    );
 
-  const renderDashboard =
+  const chartData =
+    useMemo(
+      () =>
+        revenueTrend(
+          filteredSales,
+          range
+        ),
+      [
+        filteredSales,
+        range,
+      ]
+    );
+
+  const products =
+    useMemo(
+      () =>
+        topProducts(
+          filteredSales
+        ),
+      [
+        filteredSales,
+      ]
+    );
+
+  const categories =
+    useMemo(
+      () =>
+        categoryMix(
+          filteredSales
+        ),
+      [
+        filteredSales,
+      ]
+    );
+
+  const revenue =
+    filteredSales.reduce(
+      (
+        sum,
+        sale
+      ) =>
+        sum +
+        Number(
+          sale.amount ||
+          0
+        ),
+      0
+    );
+
+  const averageOrder =
+    filteredSales.length
+      ? (
+          revenue /
+          filteredSales.length
+        )
+      : 0;
+
+  const revenueChange =
+    previousPeriodChange(
+      sales,
+      range,
+      "revenue"
+    );
+
+  const orderChange =
+    previousPeriodChange(
+      sales,
+      range,
+      "orders"
+    );
+
+  const alertRows =
+    alertData?.alerts ||
+    [];
+
+  const health =
+    alertData?.business_health ||
+    {};
+
+  const alertSummary =
+    alertData?.alert_summary ||
+    {};
+
+  const dashboardKpis =
+    dashboard?.kpis ||
+    dashboard?.statistics ||
+    {};
+
+  const user =
+    dashboard?.user ||
+    {};
+
+
+  const recentActivity =
+    useMemo(
+      () => {
+
+        const saleRows =
+          sales
+            .slice(
+              -8
+            )
+            .map(
+              (
+                sale
+              ) => ({
+                type:
+                  "sale",
+
+                icon:
+                  "💰",
+
+                title:
+                  sale.product_name ||
+                  "Sale",
+
+                subtitle:
+                  `${
+                    sale.customer_name ||
+                    "Customer"
+                  } • ${money(
+                    sale.amount
+                  )}`,
+
+                date:
+                  saleDate(
+                    sale
+                  ),
+              })
+            );
+
+        const customerRows =
+          customers
+            .slice(
+              -8
+            )
+            .map(
+              (
+                customer
+              ) => ({
+                type:
+                  "customer",
+
+                icon:
+                  "👤",
+
+                title:
+                  customer.full_name ||
+                  "New customer",
+
+                subtitle:
+                  customer.email ||
+                  customer.status ||
+                  "Customer added",
+
+                date:
+                  customerDate(
+                    customer
+                  ),
+              })
+            );
+
+        return [
+          ...saleRows,
+          ...customerRows,
+        ]
+          .sort(
+            (
+              a,
+              b
+            ) =>
+              (
+                b.date?.getTime() ||
+                0
+              ) -
+              (
+                a.date?.getTime() ||
+                0
+              )
+          )
+          .slice(
+            0,
+            6
+          );
+      },
+      [
+        sales,
+        customers,
+      ]
+    );
+
+
+  const exportReport =
     () => {
 
-      const kpis =
-        dashboard.kpis ||
-        dashboard.statistics ||
-        {};
+      const rows = [
+        [
+          "Business Report",
+          "Enterprise AI Business Copilot",
+        ],
+
+        [
+          "Period",
+
+          range ===
+          "today"
+            ? "Today"
+            : range ===
+                "all"
+              ? "All Time"
+              : `Last ${range} Days`,
+        ],
+
+        [
+          "Revenue",
+          revenue,
+        ],
+
+        [
+          "Orders",
+          filteredSales.length,
+        ],
+
+        [
+          "Customers",
+
+          customers.length ||
+          dashboardKpis.total_customers ||
+          0,
+        ],
+
+        [
+          "Average Order Value",
+          averageOrder,
+        ],
+
+        [],
+
+        [
+          "Product",
+          "Category",
+          "Quantity",
+          "Amount",
+          "Customer",
+          "Date",
+        ],
+
+        ...filteredSales.map(
+          (
+            sale
+          ) => [
+            sale.product_name ||
+            "",
+
+            sale.category ||
+            "",
+
+            sale.quantity ||
+            0,
+
+            sale.amount ||
+            0,
+
+            sale.customer_name ||
+            "",
+
+            sale.sale_date ||
+            sale.created_at ||
+            "",
+          ]
+        ),
+      ];
+
+      const csv =
+        rows
+          .map(
+            (
+              row
+            ) =>
+              row
+                .map(
+                  (
+                    cell
+                  ) =>
+                    `"${String(
+                      cell ??
+                      ""
+                    ).replace(
+                      /"/g,
+                      '""'
+                    )}"`
+                )
+                .join(
+                  ","
+                )
+          )
+          .join(
+            "\n"
+          );
+
+      const blob =
+        new Blob(
+          [
+            csv,
+          ],
+          {
+            type:
+              "text/csv;charset=utf-8;",
+          }
+        );
+
+      const url =
+        URL.createObjectURL(
+          blob
+        );
+
+      const a =
+        document.createElement(
+          "a"
+        );
+
+      a.href =
+        url;
+
+      a.download =
+        `enterprise-business-report-${
+          new Date()
+            .toISOString()
+            .slice(
+              0,
+              10
+            )
+        }.csv`;
+
+      a.click();
+
+      URL.revokeObjectURL(
+        url
+      );
+    };
 
 
-      const user =
-        dashboard.user ||
-        {};
+  const fullscreen =
+    async () => {
+
+      try {
+
+        if (
+          !document.fullscreenElement
+        ) {
+
+          await document.documentElement
+            .requestFullscreen();
+
+        } else {
+
+          await document
+            .exitFullscreen();
+        }
+
+      } catch (
+        error
+      ) {
+
+        console.error(
+          error
+        );
+      }
+    };
 
 
-      const health =
-        alertData
-          ?.business_health ||
-        {};
+  const renderDashboard =
+    () => (
 
+      <>
 
-      const alertSummary =
-        alertData
-          ?.alert_summary ||
-        {};
+        <header className="premium-dashboard-header">
 
+          <div className="premium-heading-row">
 
-      const alerts =
-        alertData?.alerts ||
-        [];
+            <button
+              className="premium-icon-button"
+              onClick={() =>
+                setSidebarCollapsed(
+                  (
+                    value
+                  ) =>
+                    !value
+                )
+              }
+              title="Collapse sidebar"
+            >
+              ☰
+            </button>
 
-
-      return (
-
-        <>
-
-          <header className="dashboard-header">
 
             <div>
 
@@ -2324,6 +3846,7 @@ function Dashboard({
               <p>
                 Welcome back,{" "}
                 {
+                  user.full_name ||
                   user.email ||
                   "User"
                 }
@@ -2331,1771 +3854,1962 @@ function Dashboard({
 
             </div>
 
+          </div>
 
-            <div className="header-actions">
+
+          <div className="premium-header-actions">
+
+            <button
+              className="premium-icon-button"
+              onClick={() =>
+                setTheme(
+                  (
+                    value
+                  ) =>
+                    value ===
+                    "dark"
+                      ? "light"
+                      : "dark"
+                )
+              }
+              title="Light / Dark mode"
+            >
+              {
+                theme ===
+                "dark"
+                  ? "☀️"
+                  : "🌙"
+              }
+            </button>
+
+
+            <div className="premium-notification-wrap">
 
               <button
-                className="refresh-button"
-                onClick={
-                  async () => {
-
-                    await refreshDashboard();
-
-                    await fetchAlerts(
-                      false
-                    );
-                  }
+                className="premium-icon-button"
+                onClick={() =>
+                  setNotificationOpen(
+                    (
+                      value
+                    ) =>
+                      !value
+                  )
                 }
+                title="Notifications"
               >
-                ↻ Refresh
+                🔔
               </button>
 
 
-              <div className="user-badge">
-                👤{" "}
+              {
+                !!alertSummary.total_alerts &&
+                (
+
+                  <span className="premium-notification-count">
+                    {
+                      alertSummary.total_alerts
+                    }
+                  </span>
+
+                )
+              }
+
+
+              {
+                notificationOpen &&
+                (
+
+                  <div className="premium-notification-popover">
+
+                    <h4>
+                      AI Business Alerts
+                    </h4>
+
+
+                    {
+                      alertRows.length
+                        ? (
+
+                            alertRows
+                              .slice(
+                                0,
+                                4
+                              )
+                              .map(
+                                (
+                                  alert,
+                                  index
+                                ) => (
+
+                                  <button
+                                    key={
+                                      index
+                                    }
+                                    className="notification-row"
+                                    onClick={() =>
+                                      fetchAlerts(
+                                        true
+                                      )
+                                    }
+                                  >
+
+                                    <span>
+                                      {
+                                        severityIcon(
+                                          alert.severity
+                                        )
+                                      }
+                                    </span>
+
+                                    <div>
+
+                                      <strong>
+                                        {
+                                          alert.title
+                                        }
+                                      </strong>
+
+                                      <p>
+                                        {
+                                          alert.message
+                                        }
+                                      </p>
+
+                                    </div>
+
+                                  </button>
+
+                                )
+                              )
+
+                          )
+                        : (
+
+                            <p className="premium-muted">
+                              No current alerts.
+                            </p>
+
+                          )
+                    }
+
+                  </div>
+
+                )
+              }
+
+            </div>
+
+
+            <button
+              className="premium-icon-button"
+              onClick={
+                fullscreen
+              }
+              title="Full screen"
+            >
+              ⛶
+            </button>
+
+
+            <button
+              className="refresh-button"
+              onClick={
+                refreshEverything
+              }
+            >
+              ↻ Refresh
+            </button>
+
+
+            <div className="user-badge">
+              👤{" "}
+              {
+                user.role ||
+                "User"
+              }
+            </div>
+
+          </div>
+
+        </header>
+
+
+        <div className="premium-filter-bar">
+
+          <div className="premium-range-buttons">
+
+            {
+              [
+                [
+                  "today",
+                  "Today",
+                ],
+
+                [
+                  "7",
+                  "7 Days",
+                ],
+
+                [
+                  "30",
+                  "30 Days",
+                ],
+
+                [
+                  "all",
+                  "All Time",
+                ],
+              ].map(
+                (
+                  [
+                    value,
+                    label,
+                  ]
+                ) => (
+
+                  <button
+                    key={
+                      value
+                    }
+                    className={
+                      range ===
+                      value
+                        ? "active"
+                        : ""
+                    }
+                    onClick={() =>
+                      setRange(
+                        value
+                      )
+                    }
+                  >
+                    {
+                      label
+                    }
+                  </button>
+
+                )
+              )
+            }
+
+          </div>
+
+
+          <button
+            className="premium-export-button"
+            onClick={
+              exportReport
+            }
+          >
+            ⬇ Export Report
+          </button>
+
+        </div>
+
+
+        <section className="premium-kpi-grid">
+
+          <div
+            className="premium-kpi-card"
+            style={{
+              "--accent":
+                "#16a34a",
+
+              "--icon-bg":
+                "#dcfce7",
+            }}
+          >
+
+            <div className="premium-kpi-icon">
+              💰
+            </div>
+
+            <div>
+
+              <p>
+                Total Revenue
+              </p>
+
+              <h2>
                 {
-                  user.role ||
-                  "User"
+                  money(
+                    sales.length
+                      ? revenue
+                      : dashboardKpis.total_revenue
+                  )
                 }
-              </div>
+              </h2>
+
+              <span
+                className={
+                  revenueChange >
+                  0
+                    ? "trend-up"
+                    : revenueChange <
+                        0
+                      ? "trend-down"
+                      : "trend-neutral"
+                }
+              >
+                {
+                  trendLabel(
+                    revenueChange
+                  )
+                }
+              </span>
 
             </div>
 
-          </header>
+          </div>
 
 
-          <section className="kpi-grid">
+          <div
+            className="premium-kpi-card"
+            style={{
+              "--accent":
+                "#2563eb",
 
-            <div className="kpi-card">
+              "--icon-bg":
+                "#dbeafe",
+            }}
+          >
 
-              <div className="kpi-icon revenue-icon">
-                💰
-              </div>
+            <div className="premium-kpi-icon">
+              🛒
+            </div>
+
+            <div>
+
+              <p>
+                Total Sales
+              </p>
+
+              <h2>
+                {
+                  sales.length
+                    ? filteredSales.length
+                    : Number(
+                        dashboardKpis.total_sales ||
+                        dashboardKpis.total_orders ||
+                        0
+                      ).toLocaleString(
+                        "en-IN"
+                      )
+                }
+              </h2>
+
+              <span
+                className={
+                  orderChange >
+                  0
+                    ? "trend-up"
+                    : orderChange <
+                        0
+                      ? "trend-down"
+                      : "trend-neutral"
+                }
+              >
+                {
+                  trendLabel(
+                    orderChange
+                  )
+                }
+              </span>
+
+            </div>
+
+          </div>
+
+
+          <div
+            className="premium-kpi-card"
+            style={{
+              "--accent":
+                "#7c3aed",
+
+              "--icon-bg":
+                "#f3e8ff",
+            }}
+          >
+
+            <div className="premium-kpi-icon">
+              👥
+            </div>
+
+            <div>
+
+              <p>
+                Total Customers
+              </p>
+
+              <h2>
+                {
+                  Number(
+                    customers.length ||
+                    dashboardKpis.total_customers ||
+                    0
+                  ).toLocaleString(
+                    "en-IN"
+                  )
+                }
+              </h2>
+
+              <span className="trend-neutral">
+                Live customer database
+              </span>
+
+            </div>
+
+          </div>
+
+
+          <div
+            className="premium-kpi-card"
+            style={{
+              "--accent":
+                "#ea580c",
+
+              "--icon-bg":
+                "#ffedd5",
+            }}
+          >
+
+            <div className="premium-kpi-icon">
+              📦
+            </div>
+
+            <div>
+
+              <p>
+                Average Order Value
+              </p>
+
+              <h2>
+                {
+                  money(
+                    sales.length
+                      ? averageOrder
+                      : dashboardKpis.average_order_value
+                  )
+                }
+              </h2>
+
+              <span className="trend-neutral">
+                Based on selected period
+              </span>
+
+            </div>
+
+          </div>
+
+        </section>
+
+
+        <section className="premium-main-grid">
+
+          <div className="premium-card">
+
+            <div className="premium-card-header">
 
               <div>
 
-                <p>
-                  Total Revenue
-                </p>
-
                 <h2>
-                  {
-                    formatMoney(
-                      kpis.total_revenue
-                    )
-                  }
+                  Revenue Trend
                 </h2>
 
+                <p>
+                  Actual sales revenue from your database
+                </p>
+
               </div>
+
+              <span className="premium-badge">
+                LIVE DATA
+              </span>
 
             </div>
 
 
-            <div className="kpi-card">
+            {
+              salesLoading
+                ? (
 
-              <div className="kpi-icon sales-icon">
-                🛒
-              </div>
+                    <div className="premium-empty-chart">
+                      Loading revenue...
+                    </div>
+
+                  )
+                : (
+
+                    <RevenueChart
+                      data={
+                        chartData
+                      }
+                    />
+
+                  )
+            }
+
+          </div>
+
+
+          <div className="premium-card">
+
+            <div className="premium-card-header">
 
               <div>
 
+                <h2>
+                  Business Health
+                </h2>
+
                 <p>
-                  Total Sales
+                  AI risk monitoring score
                 </p>
 
-                <h2>
-                  {
-                    Number(
-                      kpis.total_sales ||
-                      kpis.total_orders ||
+              </div>
+
+              <span className="premium-badge">
+                AI
+              </span>
+
+            </div>
+
+
+            <div className="health-ring-wrap">
+
+              <div
+                className="health-ring"
+                style={{
+                  "--score":
+                    `${
+                      Math.max(
+                        0,
+                        Math.min(
+                          100,
+                          Number(
+                            health.score ||
+                            0
+                          )
+                        )
+                      )
+                    }%`,
+                }}
+              >
+
+                <div className="health-ring-content">
+
+                  <strong>
+                    {
+                      health.score ??
                       0
-                    ).toLocaleString(
-                      "en-IN"
-                    )
-                  }
-                </h2>
+                    }
+                  </strong>
+
+                  <small>
+                    /100
+                  </small>
+
+                </div>
 
               </div>
 
-            </div>
 
+              <div className="health-ring-status">
 
-            <div className="kpi-card">
-
-              <div className="kpi-icon customer-icon">
-                👥
-              </div>
-
-              <div>
-
-                <p>
-                  Total Customers
-                </p>
-
-                <h2>
+                <h3>
                   {
-                    Number(
-                      kpis.total_customers ||
-                      0
-                    ).toLocaleString(
-                      "en-IN"
-                    )
+                    health.status ||
+                    "Analyzing"
                   }
+                </h3>
+
+                <p>
+                  Overall Risk:{" "}
+                  <strong>
+                    {
+                      health.overall_risk_level ||
+                      "N/A"
+                    }
+                  </strong>
+                </p>
+
+              </div>
+
+            </div>
+
+          </div>
+
+        </section>
+
+
+        <section className="premium-secondary-grid">
+
+          <div className="premium-card">
+
+            <div className="premium-card-header">
+
+              <div>
+
+                <h2>
+                  Top Performing Products
                 </h2>
+
+                <p>
+                  Highest revenue products in the selected period
+                </p>
+
+              </div>
+
+              <span className="premium-badge">
+                TOP{" "}
+                {
+                  products.length ||
+                  0
+                }
+              </span>
+
+            </div>
+
+
+            <div className="product-grid">
+
+              {
+                products.length
+                  ? (
+
+                      products.map(
+                        (
+                          product
+                        ) => (
+
+                          <article
+                            className="product-card"
+                            key={
+                              product.name
+                            }
+                          >
+
+                            <img
+                              src={
+                                productImage(
+                                  product.name
+                                )
+                              }
+                              alt={
+                                product.name
+                              }
+                            />
+
+                            <div className="product-card-body">
+
+                              <span>
+                                {
+                                  product.category
+                                }
+                              </span>
+
+                              <h3>
+                                {
+                                  product.name
+                                }
+                              </h3>
+
+                              <strong>
+                                {
+                                  money(
+                                    product.revenue
+                                  )
+                                }
+                              </strong>
+
+                              <small>
+                                {
+                                  product.quantity
+                                }{" "}
+                                units sold
+                              </small>
+
+                            </div>
+
+                          </article>
+
+                        )
+                      )
+
+                    )
+                  : (
+
+                      <div className="premium-empty-block">
+                        No product data in this period.
+                      </div>
+
+                    )
+              }
+
+            </div>
+
+          </div>
+
+
+          <div className="premium-card">
+
+            <div className="premium-card-header">
+
+              <div>
+
+                <h2>
+                  Sales by Category
+                </h2>
+
+                <p>
+                  Revenue contribution by category
+                </p>
 
               </div>
 
             </div>
 
 
-            <div className="kpi-card">
+            <div className="category-mix-wrap">
 
-              <div className="kpi-icon order-icon">
-                📦
+              <div
+                className="category-donut"
+                style={{
+                  background:
+                    categories.length
+                      ? `conic-gradient(${
+                          categories
+                            .reduce(
+                              (
+                                result,
+                                item,
+                                index
+                              ) => {
+
+                                const start =
+                                  result.total;
+
+                                const end =
+                                  start +
+                                  item.percentage;
+
+                                const colors = [
+                                  "#4f46e5",
+                                  "#06b6d4",
+                                  "#22c55e",
+                                  "#f59e0b",
+                                  "#ef4444",
+                                ];
+
+                                result.parts.push(
+                                  `${
+                                    colors[
+                                      index %
+                                      colors.length
+                                    ]
+                                  } ${start}% ${end}%`
+                                );
+
+                                result.total =
+                                  end;
+
+                                return result;
+                              },
+                              {
+                                parts:
+                                  [],
+
+                                total:
+                                  0,
+                              }
+                            )
+                            .parts.join(
+                              ","
+                            )
+                        })`
+                      : "conic-gradient(#e5e7eb 0 100%)",
+                }}
+              >
+
+                <div className="category-donut-center">
+
+                  <strong>
+                    {
+                      money(
+                        revenue
+                      )
+                    }
+                  </strong>
+
+                  <span>
+                    Total
+                  </span>
+
+                </div>
+
               </div>
 
-              <div>
 
-                <p>
-                  Average Order Value
-                </p>
+              <div className="category-legend">
 
-                <h2>
-                  {
-                    formatMoney(
-                      kpis.average_order_value
+                {
+                  categories.map(
+                    (
+                      item,
+                      index
+                    ) => (
+
+                      <div
+                        key={
+                          item.category
+                        }
+                      >
+
+                        <i
+                          className={
+                            `category-dot category-dot-${
+                              index %
+                              5
+                            }`
+                          }
+                        >
+                        </i>
+
+                        <span>
+                          {
+                            item.category
+                          }
+                        </span>
+
+                        <strong>
+                          {
+                            item.percentage.toFixed(
+                              1
+                            )
+                          }
+                          %
+                        </strong>
+
+                      </div>
+
                     )
-                  }
-                </h2>
+                  )
+                }
 
               </div>
 
             </div>
 
-          </section>
+          </div>
+
+        </section>
 
 
-          {/* =============================================
-              AI BUSINESS HEALTH
-          ============================================== */}
+        <section className="premium-secondary-grid">
 
-          <section className="business-health-section">
+          <div className="premium-card">
 
-            <div className="section-title-row">
+            <div className="premium-card-header">
 
               <div>
 
-                <span className="section-kicker">
-                  AI RISK MONITORING
-                </span>
-
                 <h2>
-                  Business Health & AI Alerts
+                  Recent Activity
                 </h2>
 
                 <p>
-                  Real-time business risk detection using
-                  MySQL data and Machine Learning forecast.
+                  Latest sales and customer activity
                 </p>
 
               </div>
 
+              <span className="live-status">
+                ● LIVE
+              </span>
+
+            </div>
+
+
+            <div className="recent-list">
+
+              {
+                recentActivity.length
+                  ? (
+
+                      recentActivity.map(
+                        (
+                          item,
+                          index
+                        ) => (
+
+                          <div
+                            className="recent-row"
+                            key={
+                              `${item.type}-${index}`
+                            }
+                          >
+
+                            <span className="recent-icon">
+                              {
+                                item.icon
+                              }
+                            </span>
+
+                            <div>
+
+                              <strong>
+                                {
+                                  item.title
+                                }
+                              </strong>
+
+                              <p>
+                                {
+                                  item.subtitle
+                                }
+                              </p>
+
+                            </div>
+
+                            <small>
+                              {
+                                item.date
+                                  ? item.date.toLocaleDateString(
+                                      "en-IN"
+                                    )
+                                  : "Recent"
+                              }
+                            </small>
+
+                          </div>
+
+                        )
+                      )
+
+                    )
+                  : (
+
+                      <div className="premium-empty-block">
+                        No recent activity.
+                      </div>
+
+                    )
+              }
+
+            </div>
+
+          </div>
+
+
+          <div className="premium-card">
+
+            <div className="premium-card-header">
+
+              <div>
+
+                <h2>
+                  AI Business Alerts
+                </h2>
+
+                <p>
+                  Detected risks and opportunities
+                </p>
+
+              </div>
 
               <button
-                className="secondary-button"
+                className="premium-link-button"
                 onClick={() =>
                   fetchAlerts(
                     true
                   )
                 }
               >
-                View All Alerts →
+                View All →
               </button>
 
             </div>
 
 
-            {
-              alertsLoading &&
-              !alertData
-                ? (
-
-                  <div className="alerts-loading">
-                    Analyzing business risks...
-                  </div>
-
-                )
-                : alertsError
-                  ? (
-
-                    <div className="error-message">
-                      {alertsError}
-                    </div>
-
-                  )
-                  : (
-
-                    <>
-
-                      <div className="health-grid">
-
-                        <div className="health-score-card">
-
-                          <div className="health-score-circle">
-
-                            <strong>
-                              {
-                                health.score ??
-                                0
-                              }
-                            </strong>
-
-                            <span>
-                              /100
-                            </span>
-
-                          </div>
-
-
-                          <div>
-
-                            <span className="health-label">
-                              BUSINESS HEALTH
-                            </span>
-
-                            <h3>
-                              {
-                                health.status ||
-                                "Loading"
-                              }
-                            </h3>
-
-                            <p>
-                              Overall Risk:{" "}
-                              <strong>
-                                {
-                                  health.overall_risk_level ||
-                                  "N/A"
-                                }
-                              </strong>
-                            </p>
-
-                          </div>
-
-                        </div>
-
-
-                        <div className="risk-count-card high-count">
-
-                          <span>
-                            🔴 High Risk
-                          </span>
-
-                          <strong>
-                            {
-                              alertSummary.high ||
-                              0
-                            }
-                          </strong>
-
-                        </div>
-
-
-                        <div className="risk-count-card medium-count">
-
-                          <span>
-                            🟠 Medium
-                          </span>
-
-                          <strong>
-                            {
-                              alertSummary.medium ||
-                              0
-                            }
-                          </strong>
-
-                        </div>
-
-
-                        <div className="risk-count-card low-count">
-
-                          <span>
-                            🟢 Low / Info
-                          </span>
-
-                          <strong>
-                            {
-                              alertSummary.low ||
-                              0
-                            }
-                          </strong>
-
-                        </div>
-
-                      </div>
-
-
-                      <div className="dashboard-alert-preview">
-
-                        {
-                          alerts.length === 0
-                            ? (
-
-                              <div className="no-alerts-card">
-
-                                ✅ No major business
-                                risks detected.
-
-                              </div>
-
-                            )
-                            : alerts
-                                .slice(
-                                  0,
-                                  4
-                                )
-                                .map(
-                                  (
-                                    alert,
-                                    index
-                                  ) => (
-
-                                    <div
-                                      key={
-                                        index
-                                      }
-                                      className={
-                                        `mini-alert-card severity-${(
-                                          alert.severity ||
-                                          "LOW"
-                                        ).toLowerCase()}`
-                                      }
-                                    >
-
-                                      <div className="mini-alert-icon">
-                                        {
-                                          getAlertIcon(
-                                            alert.type
-                                          )
-                                        }
-                                      </div>
-
-
-                                      <div>
-
-                                        <div className="mini-alert-top">
-
-                                          <h4>
-                                            {
-                                              alert.title
-                                            }
-                                          </h4>
-
-                                          <span>
-                                            {
-                                              getSeverityIcon(
-                                                alert.severity
-                                              )
-                                            }
-                                            {" "}
-                                            {
-                                              alert.severity
-                                            }
-                                          </span>
-
-                                        </div>
-
-                                        <p>
-                                          {
-                                            alert.message
-                                          }
-                                        </p>
-
-                                      </div>
-
-                                    </div>
-
-                                  )
-                                )
-                        }
-
-                      </div>
-
-                    </>
-                  )
-            }
-
-          </section>
-
-
-          <section className="dashboard-grid">
-
-            <div className="analytics-card">
-
-              <div className="card-header">
-
-                <div>
-
-                  <h2>
-                    Customer Activity
-                  </h2>
-
-                  <p>
-                    Current customer overview
-                  </p>
-
-                </div>
-
-                <span className="live-status">
-                  ● LIVE
-                </span>
-
-              </div>
-
-
-              <div className="overview-content">
-
-                <div>
-
-                  <span>
-                    New Customers
-                  </span>
-
-                  <strong>
-                    {
-                      dashboard
-                        .customers
-                        ?.new_customers ||
-                      0
-                    }
-                  </strong>
-
-                </div>
-
-
-                <div>
-
-                  <span>
-                    Active Customers
-                  </span>
-
-                  <strong>
-                    {
-                      dashboard
-                        .customers
-                        ?.active_customers ||
-                      0
-                    }
-                  </strong>
-
-                </div>
-
-
-                <div>
-
-                  <span>
-                    Inactive Customers
-                  </span>
-
-                  <strong>
-                    {
-                      dashboard
-                        .customers
-                        ?.inactive_customers ||
-                      0
-                    }
-                  </strong>
-
-                </div>
-
-              </div>
-
-            </div>
-
-
-            <div className="copilot-card">
-
-              <div className="copilot-icon">
-                🤖
-              </div>
-
-              <h2>
-                AI Business Copilot
-              </h2>
-
-              <p>
-                Ask about revenue, customers,
-                recommendations and ML forecast.
-              </p>
-
-              <button
-                type="button"
-                onClick={() =>
-                  setPage(
-                    "copilot"
-                  )
-                }
-              >
-                Start AI Copilot →
-              </button>
-
-            </div>
-
-          </section>
-
-
-          <div className="connection-status">
-
-            <span>
-              🟢 Backend Connected
-            </span>
-
-            <span>
-              FastAPI + MySQL + Scikit-Learn
-            </span>
-
-          </div>
-
-        </>
-      );
-    };
-
-
-  /* =====================================================
-     ALERTS PAGE
-  ===================================================== */
-
-  const renderAlerts =
-    () => {
-
-      if (
-        alertsLoading &&
-        !alertData
-      ) {
-
-        return (
-
-          <div className="empty-state">
-
-            <div className="loading-spinner">
-            </div>
-
-            <h3>
-              AI is analyzing business risks...
-            </h3>
-
-          </div>
-        );
-      }
-
-
-      const health =
-        alertData
-          ?.business_health ||
-        {};
-
-
-      const summary =
-        alertData
-          ?.alert_summary ||
-        {};
-
-
-      const metrics =
-        alertData
-          ?.business_metrics ||
-        {};
-
-
-      const forecastMetrics =
-        alertData
-          ?.forecast_metrics ||
-        {};
-
-
-      const alerts =
-        alertData?.alerts ||
-        [];
-
-
-      return (
-
-        <>
-
-          <header className="dashboard-header">
-
-            <div>
-
-              <h1>
-                AI Business Alerts
-              </h1>
-
-              <p>
-                Automated risk detection,
-                business health and growth opportunities
-              </p>
-
-            </div>
-
-
-            <button
-              className="refresh-button"
-              onClick={() =>
-                fetchAlerts(
-                  false
-                )
-              }
-            >
-              ↻ Analyze Again
-            </button>
-
-          </header>
-
-
-          {
-            alertsError &&
-            (
-              <div className="error-message">
-                {alertsError}
-              </div>
-            )
-          }
-
-
-          <section className="alert-health-hero">
-
-            <div className="alert-health-main">
-
-              <span className="section-kicker">
-                BUSINESS HEALTH SCORE
-              </span>
-
-              <div className="large-score">
-                {
-                  health.score ??
-                  0
-                }
-                <small>
-                  /100
-                </small>
-              </div>
-
-              <h2>
-                {
-                  health.status ||
-                  "N/A"
-                }
-              </h2>
-
-              <p>
-                Overall Risk Level:{" "}
-                <strong>
-                  {
-                    health.overall_risk_level ||
-                    "N/A"
-                  }
-                </strong>
-              </p>
-
-            </div>
-
-
-            <div className="alert-summary-grid">
-
-              <div>
-
-                <span>
-                  Total Alerts
-                </span>
-
-                <strong>
-                  {
-                    summary.total_alerts ||
-                    0
-                  }
-                </strong>
-
-              </div>
-
-
-              <div>
-
-                <span>
-                  🔴 High
-                </span>
-
-                <strong>
-                  {
-                    summary.high ||
-                    0
-                  }
-                </strong>
-
-              </div>
-
-
-              <div>
-
-                <span>
-                  🟠 Medium
-                </span>
-
-                <strong>
-                  {
-                    summary.medium ||
-                    0
-                  }
-                </strong>
-
-              </div>
-
-
-              <div>
-
-                <span>
-                  🟢 Low
-                </span>
-
-                <strong>
-                  {
-                    summary.low ||
-                    0
-                  }
-                </strong>
-
-              </div>
-
-            </div>
-
-          </section>
-
-
-          <section className="risk-metrics-grid">
-
-            <div className="risk-metric">
-
-              <span>
-                Revenue
-              </span>
-
-              <strong>
-                {
-                  formatMoney(
-                    metrics.total_revenue
-                  )
-                }
-              </strong>
-
-            </div>
-
-
-            <div className="risk-metric">
-
-              <span>
-                Inactive Customers
-              </span>
-
-              <strong>
-                {
-                  metrics.inactive_customers ||
-                  0
-                }
-              </strong>
-
-              <small>
-                {
-                  Number(
-                    metrics.inactive_customer_percentage ||
-                    0
-                  ).toFixed(1)
-                }
-                %
-              </small>
-
-            </div>
-
-
-            <div className="risk-metric">
-
-              <span>
-                ML Status
-              </span>
-
-              <strong>
-                {
-                  forecastMetrics.ml_ready
-                    ? "ACTIVE"
-                    : "NOT READY"
-                }
-              </strong>
-
-              <small>
-                {
-                  forecastMetrics.model_quality ||
-                  "N/A"
-                }
-              </small>
-
-            </div>
-
-
-            <div className="risk-metric">
-
-              <span>
-                Revenue Trend
-              </span>
-
-              <strong>
-                {
-                  forecastMetrics.trend_direction ||
-                  "N/A"
-                }
-              </strong>
-
-              <small>
-                {
-                  formatMoney(
-                    forecastMetrics.revenue_trend_per_day
-                  )
-                }
-                /day
-              </small>
-
-            </div>
-
-
-            <div className="risk-metric">
-
-              <span>
-                Next 7 Days
-              </span>
-
-              <strong>
-                {
-                  formatMoney(
-                    forecastMetrics.forecast_7_days
-                  )
-                }
-              </strong>
-
-            </div>
-
-          </section>
-
-
-          <section className="all-alerts-section">
-
-            <div className="section-title-row">
-
-              <div>
-
-                <span className="section-kicker">
-                  AI DECISION SUPPORT
-                </span>
-
-                <h2>
-                  Detected Alerts & Recommendations
-                </h2>
-
-              </div>
-
-            </div>
-
-
-            <div className="alerts-list">
+            <div className="premium-alert-list">
 
               {
-                alerts.length ===
-                0
+                alertsLoading &&
+                !alertData
                   ? (
 
-                    <div className="no-alerts-card">
-                      ✅ No alerts detected.
-                    </div>
+                      <div className="premium-empty-block">
+                        Analyzing risks...
+                      </div>
 
-                  )
-                  : alerts.map(
-                      (
-                        alert,
-                        index
-                      ) => (
+                    )
+                  : alertsError
+                    ? (
 
-                        <div
-                          key={index}
-                          className={
-                            `business-alert-card severity-${(
-                              alert.severity ||
-                              "LOW"
-                            ).toLowerCase()}`
+                        <div className="error-message">
+                          {
+                            alertsError
                           }
-                        >
-
-                          <div className="business-alert-icon">
-                            {
-                              getAlertIcon(
-                                alert.type
-                              )
-                            }
-                          </div>
-
-
-                          <div className="business-alert-content">
-
-                            <div className="business-alert-heading">
-
-                              <div>
-
-                                <span className="alert-type">
-                                  {
-                                    alert.type
-                                  }
-                                </span>
-
-                                <h3>
-                                  {
-                                    alert.title
-                                  }
-                                </h3>
-
-                              </div>
-
-
-                              <span
-                                className={
-                                  `severity-badge severity-badge-${(
-                                    alert.severity ||
-                                    "LOW"
-                                  ).toLowerCase()}`
-                                }
-                              >
-                                {
-                                  getSeverityIcon(
-                                    alert.severity
-                                  )
-                                }
-                                {" "}
-                                {
-                                  alert.severity
-                                }
-                              </span>
-
-                            </div>
-
-
-                            <p>
-                              {
-                                alert.message
-                              }
-                            </p>
-
-
-                            <div className="recommendation-box">
-
-                              <strong>
-                                AI Recommendation
-                              </strong>
-
-                              <p>
-                                {
-                                  alert.recommendation
-                                }
-                              </p>
-
-                            </div>
-
-                          </div>
-
                         </div>
 
                       )
-                    )
+                    : alertRows.length
+                      ? (
+
+                          alertRows
+                            .slice(
+                              0,
+                              4
+                            )
+                            .map(
+                              (
+                                alert,
+                                index
+                              ) => (
+
+                                <div
+                                  className="premium-alert-row"
+                                  key={
+                                    index
+                                  }
+                                >
+
+                                  <span>
+                                    {
+                                      alertIcon(
+                                        alert.type
+                                      )
+                                    }
+                                  </span>
+
+                                  <div>
+
+                                    <strong>
+                                      {
+                                        alert.title
+                                      }
+                                    </strong>
+
+                                    <p>
+                                      {
+                                        alert.message
+                                      }
+                                    </p>
+
+                                  </div>
+
+                                  <small>
+                                    {
+                                      severityIcon(
+                                        alert.severity
+                                      )
+                                    }{" "}
+                                    {
+                                      alert.severity
+                                    }
+                                  </small>
+
+                                </div>
+
+                              )
+                            )
+
+                        )
+                      : (
+
+                          <div className="no-alerts-card">
+                            ✅ No major business risks detected.
+                          </div>
+
+                        )
               }
 
             </div>
 
-          </section>
+          </div>
+
+        </section>
 
 
-          <div className="connection-status">
+        <section className="premium-ai-banner">
+
+          <div>
 
             <span>
-              🟢 AI Risk Detection Active
+              🤖 AI BUSINESS COPILOT
             </span>
 
-            <span>
-              FastAPI + MySQL + Machine Learning
-            </span>
+            <h2>
+              Ask your data a question
+            </h2>
+
+            <p>
+              Revenue, customers, products, recommendations and ML forecasts.
+            </p>
 
           </div>
 
-        </>
-      );
-    };
+          <button
+            onClick={() =>
+              setPage(
+                "copilot"
+              )
+            }
+          >
+            Open AI Copilot →
+          </button>
+
+        </section>
 
 
-  /* =====================================================
-     CUSTOMERS PAGE
-  ===================================================== */
+        <div className="connection-status">
+
+          <span>
+            🟢 Backend Connected
+          </span>
+
+          <span>
+            FastAPI + TiDB/MySQL + Scikit-Learn
+          </span>
+
+        </div>
+
+      </>
+    );
+
 
   const renderCustomers =
-    () => {
+    () => (
 
-      return (
+      <>
 
-        <>
+        <header className="dashboard-header">
 
-          <header className="dashboard-header">
+          <div>
 
-            <div>
+            <h1>
+              Customers
+            </h1>
 
-              <h1>
-                Customers
-              </h1>
+            <p>
+              Manage your business customers
+            </p>
 
-              <p>
-                Manage your business customers
-              </p>
+          </div>
 
-            </div>
-
+          <div className="header-actions">
 
             <button
               className="primary-button"
               onClick={() =>
                 setShowAddCustomer(
-                  !showAddCustomer
+                  (
+                    value
+                  ) =>
+                    !value
                 )
               }
             >
               + Add Customer
             </button>
 
-          </header>
-
-
-          {
-            showAddCustomer &&
-            (
-
-              <form
-                className="form-card"
-                onSubmit={
-                  handleAddCustomer
-                }
-              >
-
-                <h2>
-                  Add Customer
-                </h2>
-
-
-                <div className="form-grid">
-
-                  <input
-                    type="text"
-                    placeholder="Full Name"
-                    value={
-                      customerForm.full_name
-                    }
-                    onChange={
-                      (
-                        event
-                      ) =>
-                        setCustomerForm({
-                          ...customerForm,
-                          full_name:
-                            event.target.value,
-                        })
-                    }
-                    required
-                  />
-
-
-                  <input
-                    type="email"
-                    placeholder="Email"
-                    value={
-                      customerForm.email
-                    }
-                    onChange={
-                      (
-                        event
-                      ) =>
-                        setCustomerForm({
-                          ...customerForm,
-                          email:
-                            event.target.value,
-                        })
-                    }
-                    required
-                  />
-
-
-                  <input
-                    type="text"
-                    placeholder="Phone"
-                    value={
-                      customerForm.phone
-                    }
-                    onChange={
-                      (
-                        event
-                      ) =>
-                        setCustomerForm({
-                          ...customerForm,
-                          phone:
-                            event.target.value,
-                        })
-                    }
-                  />
-
-
-                  <select
-                    value={
-                      customerForm.status
-                    }
-                    onChange={
-                      (
-                        event
-                      ) =>
-                        setCustomerForm({
-                          ...customerForm,
-                          status:
-                            event.target.value,
-                        })
-                    }
-                  >
-
-                    <option value="Active">
-                      Active
-                    </option>
-
-                    <option value="Inactive">
-                      Inactive
-                    </option>
-
-                  </select>
-
-                </div>
-
-
-                <button
-                  className="primary-button"
-                  type="submit"
-                >
-                  Save Customer
-                </button>
-
-              </form>
-            )
-          }
-
-
-          <div className="table-card">
-
-            {
-              customerLoading
-                ? (
-
-                  <div className="empty-state">
-                    Loading customers...
-                  </div>
-
+            <button
+              className="refresh-button"
+              onClick={() =>
+                fetchCustomersData(
+                  false
                 )
-                : (
-
-                  <div className="table-wrapper">
-
-                    <table>
-
-                      <thead>
-
-                        <tr>
-
-                          <th>
-                            ID
-                          </th>
-
-                          <th>
-                            Customer
-                          </th>
-
-                          <th>
-                            Email
-                          </th>
-
-                          <th>
-                            Phone
-                          </th>
-
-                          <th>
-                            Status
-                          </th>
-
-                          <th>
-                            Created Date
-                          </th>
-
-                          <th>
-                            Action
-                          </th>
-
-                        </tr>
-
-                      </thead>
-
-
-                      <tbody>
-
-                        {
-                          customers.map(
-                            (
-                              customer
-                            ) => (
-
-                              <tr
-                                key={
-                                  customer.id
-                                }
-                              >
-
-                                <td>
-                                  #
-                                  {
-                                    customer.id
-                                  }
-                                </td>
-
-
-                                <td>
-
-                                  <div className="customer-name">
-
-                                    <div className="avatar">
-                                      {
-                                        customer
-                                          .full_name
-                                          ?.charAt(
-                                            0
-                                          )
-                                          ?.toUpperCase()
-                                      }
-                                    </div>
-
-                                    <strong>
-                                      {
-                                        customer.full_name
-                                      }
-                                    </strong>
-
-                                  </div>
-
-                                </td>
-
-
-                                <td>
-                                  {
-                                    customer.email
-                                  }
-                                </td>
-
-
-                                <td>
-                                  {
-                                    customer.phone ||
-                                    "-"
-                                  }
-                                </td>
-
-
-                                <td>
-
-                                  <span
-                                    className={
-                                      customer.status ===
-                                      "Active"
-                                        ? "status active-status"
-                                        : "status inactive-status"
-                                    }
-                                  >
-                                    {
-                                      customer.status
-                                    }
-                                  </span>
-
-                                </td>
-
-
-                                <td>
-                                  {
-                                    formatDate(
-                                      customer.created_at
-                                    )
-                                  }
-                                </td>
-
-
-                                <td>
-
-                                  <button
-                                    className="delete-button"
-                                    onClick={() =>
-                                      deleteCustomer(
-                                        customer.id
-                                      )
-                                    }
-                                  >
-                                    Delete
-                                  </button>
-
-                                </td>
-
-                              </tr>
-
-                            )
-                          )
-                        }
-
-                      </tbody>
-
-                    </table>
-
-                  </div>
-                )
-            }
+              }
+            >
+              ↻ Refresh
+            </button>
 
           </div>
 
-        </>
-      );
-    };
+        </header>
 
 
-  /* =====================================================
-     SALES PAGE
-  ===================================================== */
+        {
+          showAddCustomer &&
+          (
+
+            <form
+              className="form-card"
+              onSubmit={
+                addCustomer
+              }
+            >
+
+              <h2>
+                Add Customer
+              </h2>
+
+              <div className="form-grid">
+
+                <input
+                  type="text"
+                  placeholder="Full Name"
+                  value={
+                    customerForm.full_name
+                  }
+                  onChange={
+                    (
+                      e
+                    ) =>
+                      setCustomerForm({
+                        ...customerForm,
+
+                        full_name:
+                          e.target.value,
+                      })
+                  }
+                  required
+                />
+
+                <input
+                  type="email"
+                  placeholder="Email"
+                  value={
+                    customerForm.email
+                  }
+                  onChange={
+                    (
+                      e
+                    ) =>
+                      setCustomerForm({
+                        ...customerForm,
+
+                        email:
+                          e.target.value,
+                      })
+                  }
+                  required
+                />
+
+                <input
+                  type="text"
+                  placeholder="Phone"
+                  value={
+                    customerForm.phone
+                  }
+                  onChange={
+                    (
+                      e
+                    ) =>
+                      setCustomerForm({
+                        ...customerForm,
+
+                        phone:
+                          e.target.value,
+                      })
+                  }
+                />
+
+                <select
+                  value={
+                    customerForm.status
+                  }
+                  onChange={
+                    (
+                      e
+                    ) =>
+                      setCustomerForm({
+                        ...customerForm,
+
+                        status:
+                          e.target.value,
+                      })
+                  }
+                >
+
+                  <option value="Active">
+                    Active
+                  </option>
+
+                  <option value="Inactive">
+                    Inactive
+                  </option>
+
+                </select>
+
+              </div>
+
+              <button
+                className="primary-button"
+                type="submit"
+              >
+                Save Customer
+              </button>
+
+            </form>
+
+          )
+        }
+
+
+        <div className="table-card">
+
+          <div className="table-card-heading">
+
+            <h3>
+              Customer Records
+            </h3>
+
+            <p>
+              {
+                customers.length
+              }{" "}
+              customers found
+            </p>
+
+          </div>
+
+
+          {
+            customerLoading
+              ? (
+
+                  <div className="empty-state">
+
+                    <div className="loading-spinner">
+                    </div>
+
+                    <p>
+                      Loading customers...
+                    </p>
+
+                  </div>
+
+                )
+              : customers.length
+                ? (
+
+                    <div className="table-wrapper">
+
+                      <table>
+
+                        <thead>
+
+                          <tr>
+
+                            <th>
+                              ID
+                            </th>
+
+                            <th>
+                              Customer
+                            </th>
+
+                            <th>
+                              Email
+                            </th>
+
+                            <th>
+                              Phone
+                            </th>
+
+                            <th>
+                              Status
+                            </th>
+
+                            <th>
+                              Created Date
+                            </th>
+
+                            <th>
+                              Action
+                            </th>
+
+                          </tr>
+
+                        </thead>
+
+
+                        <tbody>
+
+                          {
+                            customers.map(
+                              (
+                                customer
+                              ) => (
+
+                                <tr
+                                  key={
+                                    customer.id
+                                  }
+                                >
+
+                                  <td>
+                                    #
+                                    {
+                                      customer.id
+                                    }
+                                  </td>
+
+                                  <td>
+
+                                    <div className="customer-name">
+
+                                      <div className="avatar">
+                                        {
+                                          customer.full_name
+                                            ?.charAt(
+                                              0
+                                            )
+                                            ?.toUpperCase() ||
+                                          "C"
+                                        }
+                                      </div>
+
+                                      <strong>
+                                        {
+                                          customer.full_name
+                                        }
+                                      </strong>
+
+                                    </div>
+
+                                  </td>
+
+                                  <td>
+                                    {
+                                      customer.email
+                                    }
+                                  </td>
+
+                                  <td>
+                                    {
+                                      customer.phone ||
+                                      "N/A"
+                                    }
+                                  </td>
+
+                                  <td>
+
+                                    <span
+                                      className={
+                                        customer.status ===
+                                        "Active"
+                                          ? "status active-status"
+                                          : "status inactive-status"
+                                      }
+                                    >
+                                      {
+                                        customer.status
+                                      }
+                                    </span>
+
+                                  </td>
+
+                                  <td>
+                                    {
+                                      dateText(
+                                        customer.created_at
+                                      )
+                                    }
+                                  </td>
+
+                                  <td>
+
+                                    <button
+                                      className="delete-button"
+                                      onClick={() =>
+                                        deleteCustomer(
+                                          customer.id
+                                        )
+                                      }
+                                    >
+                                      Delete
+                                    </button>
+
+                                  </td>
+
+                                </tr>
+
+                              )
+                            )
+                          }
+
+                        </tbody>
+
+                      </table>
+
+                    </div>
+
+                  )
+                : (
+
+                    <div className="empty-state">
+
+                      <h3>
+                        No Customers Found
+                      </h3>
+
+                      <p>
+                        Add your first customer to get started.
+                      </p>
+
+                    </div>
+
+                  )
+          }
+
+        </div>
+
+      </>
+    );
+
 
   const renderSales =
-    () => {
+    () => (
 
-      return (
+      <>
 
-        <>
+        <header className="dashboard-header">
 
-          <header className="dashboard-header">
+          <div>
 
-            <div>
+            <h1>
+              Sales
+            </h1>
 
-              <h1>
-                Sales
-              </h1>
+            <p>
+              Manage sales and revenue records
+            </p>
 
-              <p>
-                Manage business sales transactions
-              </p>
+          </div>
 
-            </div>
-
+          <div className="header-actions">
 
             <button
               className="primary-button"
               onClick={() =>
                 setShowAddSale(
-                  !showAddSale
+                  (
+                    value
+                  ) =>
+                    !value
                 )
               }
             >
               + Add Sale
             </button>
 
-          </header>
-
-
-          {
-            showAddSale &&
-            (
-
-              <form
-                className="form-card"
-                onSubmit={
-                  handleAddSale
-                }
-              >
-
-                <h2>
-                  Add Sale
-                </h2>
-
-
-                <div className="form-grid">
-
-                  <input
-                    type="text"
-                    placeholder="Product Name"
-                    value={
-                      saleForm.product_name
-                    }
-                    onChange={
-                      (
-                        event
-                      ) =>
-                        setSaleForm({
-                          ...saleForm,
-                          product_name:
-                            event.target.value,
-                        })
-                    }
-                    required
-                  />
-
-
-                  <input
-                    type="text"
-                    placeholder="Category"
-                    value={
-                      saleForm.category
-                    }
-                    onChange={
-                      (
-                        event
-                      ) =>
-                        setSaleForm({
-                          ...saleForm,
-                          category:
-                            event.target.value,
-                        })
-                    }
-                  />
-
-
-                  <input
-                    type="number"
-                    min="1"
-                    placeholder="Quantity"
-                    value={
-                      saleForm.quantity
-                    }
-                    onChange={
-                      (
-                        event
-                      ) =>
-                        setSaleForm({
-                          ...saleForm,
-                          quantity:
-                            event.target.value,
-                        })
-                    }
-                    required
-                  />
-
-
-                  <input
-                    type="number"
-                    min="0"
-                    step="0.01"
-                    placeholder="Amount"
-                    value={
-                      saleForm.amount
-                    }
-                    onChange={
-                      (
-                        event
-                      ) =>
-                        setSaleForm({
-                          ...saleForm,
-                          amount:
-                            event.target.value,
-                        })
-                    }
-                    required
-                  />
-
-
-                  <input
-                    type="text"
-                    placeholder="Customer Name"
-                    value={
-                      saleForm.customer_name
-                    }
-                    onChange={
-                      (
-                        event
-                      ) =>
-                        setSaleForm({
-                          ...saleForm,
-                          customer_name:
-                            event.target.value,
-                        })
-                    }
-                  />
-
-                </div>
-
-
-                <button
-                  className="primary-button"
-                  type="submit"
-                >
-                  Save Sale
-                </button>
-
-              </form>
-            )
-          }
-
-
-          <div className="table-card">
-
-            {
-              salesLoading
-                ? (
-
-                  <div className="empty-state">
-                    Loading sales...
-                  </div>
-
+            <button
+              className="refresh-button"
+              onClick={() =>
+                fetchSalesData(
+                  false
                 )
-                : (
-
-                  <div className="table-wrapper">
-
-                    <table>
-
-                      <thead>
-
-                        <tr>
-
-                          <th>
-                            ID
-                          </th>
-
-                          <th>
-                            Product
-                          </th>
-
-                          <th>
-                            Category
-                          </th>
-
-                          <th>
-                            Quantity
-                          </th>
-
-                          <th>
-                            Amount
-                          </th>
-
-                          <th>
-                            Customer
-                          </th>
-
-                          <th>
-                            Sale Date
-                          </th>
-
-                          <th>
-                            Action
-                          </th>
-
-                        </tr>
-
-                      </thead>
-
-
-                      <tbody>
-
-                        {
-                          sales.map(
-                            (
-                              sale
-                            ) => (
-
-                              <tr
-                                key={
-                                  sale.id
-                                }
-                              >
-
-                                <td>
-                                  #
-                                  {
-                                    sale.id
-                                  }
-                                </td>
-
-                                <td>
-                                  <strong>
-                                    {
-                                      sale.product_name
-                                    }
-                                  </strong>
-                                </td>
-
-                                <td>
-                                  {
-                                    sale.category ||
-                                    "-"
-                                  }
-                                </td>
-
-                                <td>
-                                  {
-                                    sale.quantity
-                                  }
-                                </td>
-
-                                <td>
-                                  <strong>
-                                    {
-                                      formatMoney(
-                                        sale.amount
-                                      )
-                                    }
-                                  </strong>
-                                </td>
-
-                                <td>
-                                  {
-                                    sale.customer_name ||
-                                    "-"
-                                  }
-                                </td>
-
-                                <td>
-                                  {
-                                    formatDate(
-                                      sale.sale_date
-                                    )
-                                  }
-                                </td>
-
-                                <td>
-
-                                  <button
-                                    className="delete-button"
-                                    onClick={() =>
-                                      deleteSale(
-                                        sale.id
-                                      )
-                                    }
-                                  >
-                                    Delete
-                                  </button>
-
-                                </td>
-
-                              </tr>
-
-                            )
-                          )
-                        }
-
-                      </tbody>
-
-                    </table>
-
-                  </div>
-                )
-            }
+              }
+            >
+              ↻ Refresh
+            </button>
 
           </div>
 
-        </>
-      );
-    };
+        </header>
 
 
-  /* =====================================================
-     ANALYTICS PAGE
-  ===================================================== */
+        {
+          showAddSale &&
+          (
+
+            <form
+              className="form-card"
+              onSubmit={
+                addSale
+              }
+            >
+
+              <h2>
+                Add Sale
+              </h2>
+
+              <div className="form-grid">
+
+                <input
+                  type="text"
+                  placeholder="Product Name"
+                  value={
+                    saleForm.product_name
+                  }
+                  onChange={
+                    (
+                      e
+                    ) =>
+                      setSaleForm({
+                        ...saleForm,
+
+                        product_name:
+                          e.target.value,
+                      })
+                  }
+                  required
+                />
+
+                <input
+                  type="text"
+                  placeholder="Category"
+                  value={
+                    saleForm.category
+                  }
+                  onChange={
+                    (
+                      e
+                    ) =>
+                      setSaleForm({
+                        ...saleForm,
+
+                        category:
+                          e.target.value,
+                      })
+                  }
+                  required
+                />
+
+                <input
+                  type="number"
+                  min="1"
+                  placeholder="Quantity"
+                  value={
+                    saleForm.quantity
+                  }
+                  onChange={
+                    (
+                      e
+                    ) =>
+                      setSaleForm({
+                        ...saleForm,
+
+                        quantity:
+                          e.target.value,
+                      })
+                  }
+                  required
+                />
+
+                <input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  placeholder="Amount"
+                  value={
+                    saleForm.amount
+                  }
+                  onChange={
+                    (
+                      e
+                    ) =>
+                      setSaleForm({
+                        ...saleForm,
+
+                        amount:
+                          e.target.value,
+                      })
+                  }
+                  required
+                />
+
+                <input
+                  type="text"
+                  placeholder="Customer Name"
+                  value={
+                    saleForm.customer_name
+                  }
+                  onChange={
+                    (
+                      e
+                    ) =>
+                      setSaleForm({
+                        ...saleForm,
+
+                        customer_name:
+                          e.target.value,
+                      })
+                  }
+                  required
+                />
+
+              </div>
+
+              <button
+                className="primary-button"
+                type="submit"
+              >
+                Save Sale
+              </button>
+
+            </form>
+
+          )
+        }
+
+
+        <div className="table-card">
+
+          <div className="table-card-heading">
+
+            <h3>
+              Sales Records
+            </h3>
+
+            <p>
+              {
+                sales.length
+              }{" "}
+              sales found
+            </p>
+
+          </div>
+
+
+          {
+            salesLoading
+              ? (
+
+                  <div className="empty-state">
+
+                    <div className="loading-spinner">
+                    </div>
+
+                    <p>
+                      Loading sales...
+                    </p>
+
+                  </div>
+
+                )
+              : sales.length
+                ? (
+
+                    <div className="table-wrapper">
+
+                      <table>
+
+                        <thead>
+
+                          <tr>
+
+                            <th>
+                              ID
+                            </th>
+
+                            <th>
+                              Product
+                            </th>
+
+                            <th>
+                              Category
+                            </th>
+
+                            <th>
+                              Quantity
+                            </th>
+
+                            <th>
+                              Amount
+                            </th>
+
+                            <th>
+                              Customer
+                            </th>
+
+                            <th>
+                              Date
+                            </th>
+
+                            <th>
+                              Action
+                            </th>
+
+                          </tr>
+
+                        </thead>
+
+
+                        <tbody>
+
+                          {
+                            sales.map(
+                              (
+                                sale
+                              ) => (
+
+                                <tr
+                                  key={
+                                    sale.id
+                                  }
+                                >
+
+                                  <td>
+                                    #
+                                    {
+                                      sale.id
+                                    }
+                                  </td>
+
+                                  <td>
+
+                                    <strong>
+                                      {
+                                        sale.product_name
+                                      }
+                                    </strong>
+
+                                  </td>
+
+                                  <td>
+                                    {
+                                      sale.category ||
+                                      "N/A"
+                                    }
+                                  </td>
+
+                                  <td>
+                                    {
+                                      sale.quantity
+                                    }
+                                  </td>
+
+                                  <td>
+
+                                    <strong>
+                                      {
+                                        money(
+                                          sale.amount
+                                        )
+                                      }
+                                    </strong>
+
+                                  </td>
+
+                                  <td>
+                                    {
+                                      sale.customer_name ||
+                                      "N/A"
+                                    }
+                                  </td>
+
+                                  <td>
+                                    {
+                                      dateText(
+                                        sale.sale_date ||
+                                        sale.created_at
+                                      )
+                                    }
+                                  </td>
+
+                                  <td>
+
+                                    <button
+                                      className="delete-button"
+                                      onClick={() =>
+                                        deleteSale(
+                                          sale.id
+                                        )
+                                      }
+                                    >
+                                      Delete
+                                    </button>
+
+                                  </td>
+
+                                </tr>
+
+                              )
+                            )
+                          }
+
+                        </tbody>
+
+                      </table>
+
+                    </div>
+
+                  )
+                : (
+
+                    <div className="empty-state">
+
+                      <h3>
+                        No Sales Found
+                      </h3>
+
+                      <p>
+                        Add your first sale to get started.
+                      </p>
+
+                    </div>
+
+                  )
+          }
+
+        </div>
+
+      </>
+    );
+
 
   const renderAnalytics =
     () => {
 
-      if (
-        analyticsLoading &&
-        !analytics
-      ) {
-
-        return (
-
-          <div className="empty-state">
-
-            <div className="loading-spinner">
-            </div>
-
-            <h3>
-              Loading Analytics...
-            </h3>
-
-          </div>
-        );
-      }
-
-
       const kpis =
         analytics?.kpis ||
+        analytics?.statistics ||
         {};
 
-
-      const salesData =
-        analytics?.sales ||
-        {};
-
-
-      const customersData =
+      const customerData =
         analytics?.customers ||
         {};
 
+      const model =
+        forecastData?.model_info ||
+        forecastData?.model ||
+        {};
 
       const summary =
         forecastData?.summary ||
         {};
 
-
-      const modelInfo =
-        forecastData?.model_info ||
-        {};
-
+      const historical =
+        forecastData?.historical ||
+        forecastData?.historical_data ||
+        [];
 
       const forecastRows =
         forecastData?.forecast ||
+        forecastData?.predictions ||
         [];
-
-
-      const historicalRows =
-        forecastData?.historical ||
-        [];
-
-
-      const mlReady =
-        modelInfo.ml_ready ===
-        true;
-
 
       const r2 =
-        modelInfo.revenue_r2_score;
+        model.r2_score ??
+        model.r2;
 
+      const trainingDays =
+        Number(
+          model.training_days ||
+          0
+        );
+
+      const minimumDays =
+        Number(
+          model.minimum_ml_days ||
+          5
+        );
 
       const readiness =
         Math.min(
-          (
-            Number(
-              modelInfo.training_days ||
-              0
-            ) /
-            Math.max(
-              Number(
-                modelInfo.minimum_ml_days ||
-                5
-              ),
-              1
-            )
-          ) *
-            100,
-          100
+          100,
+          minimumDays
+            ? (
+                trainingDays /
+                minimumDays
+              ) *
+              100
+            : 0
         );
-
 
       return (
 
@@ -4106,16 +5820,14 @@ function Dashboard({
             <div>
 
               <h1>
-                Business Analytics
+                Analytics & ML Forecast
               </h1>
 
               <p>
-                Analytics and Machine Learning
-                sales forecasting
+                Business intelligence and predictive analytics
               </p>
 
             </div>
-
 
             <button
               className="refresh-button"
@@ -4123,274 +5835,186 @@ function Dashboard({
                 openAnalytics
               }
             >
-              ↻ Refresh
+              ↻ Refresh Analytics
             </button>
 
           </header>
 
 
-          <section className="kpi-grid">
+          {
+            analyticsLoading &&
+            !analytics
+              ? (
 
-            <div className="kpi-card">
+                  <div className="empty-state">
 
-              <div className="kpi-icon revenue-icon">
-                💰
-              </div>
+                    <div className="loading-spinner">
+                    </div>
 
-              <div>
+                    <p>
+                      Loading analytics...
+                    </p>
 
-                <p>
-                  Total Revenue
-                </p>
+                  </div>
 
-                <h2>
-                  {
-                    formatMoney(
-                      kpis.total_revenue
-                    )
-                  }
-                </h2>
+                )
+              : (
 
-              </div>
+                  <section className="analytics-grid">
 
-            </div>
+                    <div className="analytics-card">
 
+                      <div className="card-header">
 
-            <div className="kpi-card">
+                        <div>
 
-              <div className="kpi-icon sales-icon">
-                🛒
-              </div>
+                          <h2>
+                            Business KPIs
+                          </h2>
 
-              <div>
+                          <p>
+                            Current analytics overview
+                          </p>
 
-                <p>
-                  Total Sales
-                </p>
+                        </div>
 
-                <h2>
-                  {
-                    kpis.total_sales ||
-                    0
-                  }
-                </h2>
+                      </div>
 
-              </div>
 
-            </div>
+                      <div className="overview-content">
 
+                        <div>
 
-            <div className="kpi-card">
+                          <span>
+                            Revenue
+                          </span>
 
-              <div className="kpi-icon customer-icon">
-                👥
-              </div>
+                          <strong>
+                            {
+                              money(
+                                kpis.total_revenue
+                              )
+                            }
+                          </strong>
 
-              <div>
+                        </div>
 
-                <p>
-                  Total Customers
-                </p>
 
-                <h2>
-                  {
-                    kpis.total_customers ||
-                    0
-                  }
-                </h2>
+                        <div>
 
-              </div>
+                          <span>
+                            Sales
+                          </span>
 
-            </div>
+                          <strong>
+                            {
+                              kpis.total_sales ||
+                              kpis.total_orders ||
+                              0
+                            }
+                          </strong>
 
+                        </div>
 
-            <div className="kpi-card">
 
-              <div className="kpi-icon order-icon">
-                📦
-              </div>
+                        <div>
 
-              <div>
+                          <span>
+                            Average Order
+                          </span>
 
-                <p>
-                  Average Order Value
-                </p>
+                          <strong>
+                            {
+                              money(
+                                kpis.average_order_value
+                              )
+                            }
+                          </strong>
 
-                <h2>
-                  {
-                    formatMoney(
-                      kpis.average_order_value
-                    )
-                  }
-                </h2>
+                        </div>
 
-              </div>
+                      </div>
 
-            </div>
+                    </div>
 
-          </section>
 
+                    <div className="analytics-card">
 
-          <section className="analytics-grid">
+                      <div className="card-header">
 
-            <div className="analytics-card">
+                        <div>
 
-              <div className="card-header">
+                          <h2>
+                            Customer Analytics
+                          </h2>
 
-                <div>
+                          <p>
+                            Customer activity overview
+                          </p>
 
-                  <h2>
-                    Sales Performance
-                  </h2>
+                        </div>
 
-                  <p>
-                    Current sales overview
-                  </p>
+                      </div>
 
-                </div>
 
-                <span className="live-status">
-                  ● LIVE
-                </span>
+                      <div className="overview-content">
 
-              </div>
+                        <div>
 
+                          <span>
+                            New
+                          </span>
 
-              <div className="overview-content">
+                          <strong>
+                            {
+                              customerData.new_customers ||
+                              0
+                            }
+                          </strong>
 
-                <div>
+                        </div>
 
-                  <span>
-                    Today
-                  </span>
 
-                  <strong>
-                    {
-                      formatMoney(
-                        salesData.today
-                      )
-                    }
-                  </strong>
+                        <div>
 
-                </div>
+                          <span>
+                            Active
+                          </span>
 
+                          <strong>
+                            {
+                              customerData.active_customers ||
+                              0
+                            }
+                          </strong>
 
-                <div>
+                        </div>
 
-                  <span>
-                    This Week
-                  </span>
 
-                  <strong>
-                    {
-                      formatMoney(
-                        salesData.this_week
-                      )
-                    }
-                  </strong>
+                        <div>
 
-                </div>
+                          <span>
+                            Inactive
+                          </span>
 
+                          <strong>
+                            {
+                              customerData.inactive_customers ||
+                              0
+                            }
+                          </strong>
 
-                <div>
+                        </div>
 
-                  <span>
-                    This Month
-                  </span>
+                      </div>
 
-                  <strong>
-                    {
-                      formatMoney(
-                        salesData.this_month
-                      )
-                    }
-                  </strong>
+                    </div>
 
-                </div>
+                  </section>
 
-              </div>
+                )
+          }
 
-            </div>
-
-
-            <div className="analytics-card">
-
-              <div className="card-header">
-
-                <div>
-
-                  <h2>
-                    Customer Analytics
-                  </h2>
-
-                  <p>
-                    Customer activity overview
-                  </p>
-
-                </div>
-
-              </div>
-
-
-              <div className="overview-content">
-
-                <div>
-
-                  <span>
-                    New
-                  </span>
-
-                  <strong>
-                    {
-                      customersData.new_customers ||
-                      0
-                    }
-                  </strong>
-
-                </div>
-
-
-                <div>
-
-                  <span>
-                    Active
-                  </span>
-
-                  <strong>
-                    {
-                      customersData.active_customers ||
-                      0
-                    }
-                  </strong>
-
-                </div>
-
-
-                <div>
-
-                  <span>
-                    Inactive
-                  </span>
-
-                  <strong>
-                    {
-                      customersData.inactive_customers ||
-                      0
-                    }
-                  </strong>
-
-                </div>
-
-              </div>
-
-            </div>
-
-          </section>
-
-
-          {/* =============================================
-              ML MODEL STATUS
-          ============================================== */}
 
           <section className="ml-section">
 
@@ -4415,13 +6039,17 @@ function Dashboard({
 
               <span
                 className={
-                  mlReady
+                  model.ml_ready ||
+                  trainingDays >=
+                    minimumDays
                     ? "ml-status ml-status-ready"
                     : "ml-status ml-status-training"
                 }
               >
                 {
-                  mlReady
+                  model.ml_ready ||
+                  trainingDays >=
+                    minimumDays
                     ? "● ML ACTIVE"
                     : "● DATA COLLECTION"
                 }
@@ -4440,16 +6068,14 @@ function Dashboard({
 
                 <strong>
                   {
-                    modelInfo.training_days ||
-                    0
+                    trainingDays
                   }
                 </strong>
 
                 <small>
                   Minimum{" "}
                   {
-                    modelInfo.minimum_ml_days ||
-                    5
+                    minimumDays
                   }
                 </small>
 
@@ -4464,7 +6090,7 @@ function Dashboard({
 
                 <strong>
                   {
-                    modelInfo.model_quality ||
+                    model.model_quality ||
                     "N/A"
                   }
                 </strong>
@@ -4472,8 +6098,10 @@ function Dashboard({
                 <small>
                   R²:{" "}
                   {
-                    r2 !== null &&
-                    r2 !== undefined
+                    r2 !==
+                      undefined &&
+                    r2 !==
+                      null
                       ? Number(
                           r2
                         ).toFixed(
@@ -4494,17 +6122,17 @@ function Dashboard({
 
                 <strong>
                   {
-                    modelInfo.trend_direction ||
+                    model.trend_direction ||
                     "N/A"
                   }
                 </strong>
 
                 <small>
                   {
-                    formatMoney(
-                      modelInfo.revenue_trend_per_day
+                    money(
+                      model.revenue_trend_per_day
                     )
-                  }
+                  }{" "}
                   / day
                 </small>
 
@@ -4519,7 +6147,7 @@ function Dashboard({
 
                 <strong>
                   {
-                    formatMoney(
+                    money(
                       summary.forecast_7_days
                     )
                   }
@@ -4527,8 +6155,8 @@ function Dashboard({
 
                 <small>
                   {
-                    modelInfo.method ||
-                    "N/A"
+                    model.method ||
+                    "Linear Regression"
                   }
                 </small>
 
@@ -4563,7 +6191,9 @@ function Dashboard({
                   className="ml-progress-fill"
                   style={{
                     width:
-                      `${readiness}%`,
+                      `${
+                        readiness
+                      }%`,
                   }}
                 >
                 </div>
@@ -4574,10 +6204,6 @@ function Dashboard({
 
           </section>
 
-
-          {/* =============================================
-              FORECAST
-          ============================================== */}
 
           <section className="forecast-section">
 
@@ -4606,23 +6232,23 @@ function Dashboard({
               forecastLoading
                 ? (
 
-                  <div className="empty-state">
-                    Generating forecast...
-                  </div>
+                    <div className="empty-state">
+                      Generating forecast...
+                    </div>
 
-                )
+                  )
                 : (
 
-                  <RevenueForecastChart
-                    historical={
-                      historicalRows
-                    }
-                    forecast={
-                      forecastRows
-                    }
-                  />
+                    <ForecastChart
+                      historical={
+                        historical
+                      }
+                      forecast={
+                        forecastRows
+                      }
+                    />
 
-                )
+                  )
             }
 
 
@@ -4651,6 +6277,7 @@ function Dashboard({
                   </div>
 
                 </div>
+
               )
             }
 
@@ -4659,17 +6286,13 @@ function Dashboard({
 
               <div className="table-card-heading">
 
-                <div>
+                <h3>
+                  Next 7 Days Forecast
+                </h3>
 
-                  <h3>
-                    Next 7 Days Forecast
-                  </h3>
-
-                  <p>
-                    ML predicted business performance
-                  </p>
-
-                </div>
+                <p>
+                  ML predicted business performance
+                </p>
 
               </div>
 
@@ -4719,31 +6342,35 @@ function Dashboard({
 
                             <td>
                               {
-                                formatDate(
+                                dateText(
                                   item.date
                                 )
                               }
                             </td>
 
                             <td>
+
                               <strong>
                                 {
-                                  formatMoney(
+                                  money(
                                     item.predicted_revenue
                                   )
                                 }
                               </strong>
+
                             </td>
 
                             <td>
                               {
-                                item.predicted_orders
+                                item.predicted_orders ??
+                                "-"
                               }
                             </td>
 
                             <td>
                               {
-                                item.predicted_quantity
+                                item.predicted_quantity ??
+                                "-"
                               }
                             </td>
 
@@ -4771,7 +6398,7 @@ function Dashboard({
             </span>
 
             <span>
-              FastAPI + MySQL + Scikit-Learn
+              FastAPI + TiDB/MySQL + Scikit-Learn
             </span>
 
           </div>
@@ -4781,49 +6408,481 @@ function Dashboard({
     };
 
 
-  /* =====================================================
-     COPILOT PAGE
-  ===================================================== */
+  const renderAlerts =
+    () => {
+
+      const metrics =
+        alertData?.business_metrics ||
+        {};
+
+      const forecastMetrics =
+        alertData?.forecast_metrics ||
+        {};
+
+      return (
+
+        <>
+
+          <header className="dashboard-header">
+
+            <div>
+
+              <h1>
+                AI Business Alerts
+              </h1>
+
+              <p>
+                Automated risk detection, business health and growth opportunities
+              </p>
+
+            </div>
+
+            <button
+              className="refresh-button"
+              onClick={() =>
+                fetchAlerts(
+                  false
+                )
+              }
+            >
+              ↻ Analyze Again
+            </button>
+
+          </header>
+
+
+          {
+            alertsError &&
+            (
+
+              <div className="error-message">
+                {
+                  alertsError
+                }
+              </div>
+
+            )
+          }
+
+
+          <section className="alert-health-hero">
+
+            <div className="alert-health-main">
+
+              <span className="section-kicker">
+                BUSINESS HEALTH SCORE
+              </span>
+
+              <div className="large-score">
+
+                {
+                  health.score ??
+                  0
+                }
+
+                <small>
+                  /100
+                </small>
+
+              </div>
+
+              <h2>
+                {
+                  health.status ||
+                  "N/A"
+                }
+              </h2>
+
+              <p>
+                Overall Risk Level:{" "}
+
+                <strong>
+                  {
+                    health.overall_risk_level ||
+                    "N/A"
+                  }
+                </strong>
+              </p>
+
+            </div>
+
+
+            <div className="alert-summary-grid">
+
+              <div>
+
+                <span>
+                  Total Alerts
+                </span>
+
+                <strong>
+                  {
+                    alertSummary.total_alerts ||
+                    0
+                  }
+                </strong>
+
+              </div>
+
+
+              <div>
+
+                <span>
+                  🔴 High
+                </span>
+
+                <strong>
+                  {
+                    alertSummary.high ||
+                    0
+                  }
+                </strong>
+
+              </div>
+
+
+              <div>
+
+                <span>
+                  🟠 Medium
+                </span>
+
+                <strong>
+                  {
+                    alertSummary.medium ||
+                    0
+                  }
+                </strong>
+
+              </div>
+
+
+              <div>
+
+                <span>
+                  🟢 Low
+                </span>
+
+                <strong>
+                  {
+                    alertSummary.low ||
+                    0
+                  }
+                </strong>
+
+              </div>
+
+            </div>
+
+          </section>
+
+
+          <section className="risk-metrics-grid">
+
+            <div className="risk-metric">
+
+              <span>
+                Revenue
+              </span>
+
+              <strong>
+                {
+                  money(
+                    metrics.total_revenue
+                  )
+                }
+              </strong>
+
+            </div>
+
+
+            <div className="risk-metric">
+
+              <span>
+                Inactive Customers
+              </span>
+
+              <strong>
+                {
+                  metrics.inactive_customers ||
+                  0
+                }
+              </strong>
+
+              <small>
+                {
+                  Number(
+                    metrics.inactive_customer_percentage ||
+                    0
+                  ).toFixed(
+                    1
+                  )
+                }
+                %
+              </small>
+
+            </div>
+
+
+            <div className="risk-metric">
+
+              <span>
+                ML Status
+              </span>
+
+              <strong>
+                {
+                  forecastMetrics.ml_ready
+                    ? "ACTIVE"
+                    : "NOT READY"
+                }
+              </strong>
+
+              <small>
+                {
+                  forecastMetrics.model_quality ||
+                  "N/A"
+                }
+              </small>
+
+            </div>
+
+
+            <div className="risk-metric">
+
+              <span>
+                Revenue Trend
+              </span>
+
+              <strong>
+                {
+                  forecastMetrics.trend_direction ||
+                  "N/A"
+                }
+              </strong>
+
+              <small>
+                {
+                  money(
+                    forecastMetrics.revenue_trend_per_day
+                  )
+                }{" "}
+                / day
+              </small>
+
+            </div>
+
+
+            <div className="risk-metric">
+
+              <span>
+                Next 7 Days
+              </span>
+
+              <strong>
+                {
+                  money(
+                    forecastMetrics.forecast_7_days
+                  )
+                }
+              </strong>
+
+            </div>
+
+          </section>
+
+
+          <section className="all-alerts-section">
+
+            <div className="section-title-row">
+
+              <div>
+
+                <span className="section-kicker">
+                  AI DECISION SUPPORT
+                </span>
+
+                <h2>
+                  Detected Alerts & Recommendations
+                </h2>
+
+              </div>
+
+            </div>
+
+
+            <div className="alerts-list">
+
+              {
+                alertsLoading &&
+                !alertData
+                  ? (
+
+                      <div className="alerts-loading">
+                        AI is analyzing business risks...
+                      </div>
+
+                    )
+                  : alertRows.length
+                    ? (
+
+                        alertRows.map(
+                          (
+                            alert,
+                            index
+                          ) => (
+
+                            <div
+                              key={
+                                index
+                              }
+                              className={
+                                `business-alert-card severity-${
+                                  String(
+                                    alert.severity ||
+                                    "LOW"
+                                  ).toLowerCase()
+                                }`
+                              }
+                            >
+
+                              <div className="business-alert-icon">
+                                {
+                                  alertIcon(
+                                    alert.type
+                                  )
+                                }
+                              </div>
+
+
+                              <div className="business-alert-content">
+
+                                <div className="business-alert-heading">
+
+                                  <div>
+
+                                    <span className="alert-type">
+                                      {
+                                        alert.type
+                                      }
+                                    </span>
+
+                                    <h3>
+                                      {
+                                        alert.title
+                                      }
+                                    </h3>
+
+                                  </div>
+
+
+                                  <span
+                                    className={
+                                      `severity-badge severity-badge-${
+                                        String(
+                                          alert.severity ||
+                                          "LOW"
+                                        ).toLowerCase()
+                                      }`
+                                    }
+                                  >
+                                    {
+                                      severityIcon(
+                                        alert.severity
+                                      )
+                                    }{" "}
+                                    {
+                                      alert.severity
+                                    }
+                                  </span>
+
+                                </div>
+
+
+                                <p>
+                                  {
+                                    alert.message
+                                  }
+                                </p>
+
+
+                                <div className="recommendation-box">
+
+                                  <strong>
+                                    AI Recommendation
+                                  </strong>
+
+                                  <p>
+                                    {
+                                      alert.recommendation
+                                    }
+                                  </p>
+
+                                </div>
+
+                              </div>
+
+                            </div>
+
+                          )
+                        )
+
+                      )
+                    : (
+
+                        <div className="no-alerts-card">
+                          ✅ No alerts detected.
+                        </div>
+
+                      )
+              }
+
+            </div>
+
+          </section>
+
+
+          <div className="connection-status">
+
+            <span>
+              🟢 AI Risk Detection Active
+            </span>
+
+            <span>
+              FastAPI + TiDB/MySQL + Machine Learning
+            </span>
+
+          </div>
+
+        </>
+      );
+    };
+
 
   const renderCopilot =
     () => {
 
       const suggestions = [
+        [
+          "💰 Revenue",
+          "What is my total revenue?",
+        ],
 
-        {
-          label:
-            "💰 Revenue",
+        [
+          "🔮 ML Forecast",
+          "What is my next 7 days sales forecast?",
+        ],
 
-          question:
-            "What is my total revenue?",
-        },
+        [
+          "💡 Recommendations",
+          "What should I do to improve my business?",
+        ],
 
-        {
-          label:
-            "🔮 ML Forecast",
-
-          question:
-            "What is my next 7 days sales forecast?",
-        },
-
-        {
-          label:
-            "💡 Recommendations",
-
-          question:
-            "What should I do to improve my business?",
-        },
-
-        {
-          label:
-            "📦 Focus Product",
-
-          question:
-            "Which product should I focus on?",
-        },
-
+        [
+          "📦 Focus Product",
+          "Which product should I focus on?",
+        ],
       ];
-
 
       return (
 
@@ -4838,8 +6897,7 @@ function Dashboard({
               </h1>
 
               <p>
-                Ask questions about your business,
-                recommendations and ML forecast
+                Ask questions about your business, recommendations and ML forecast
               </p>
 
             </div>
@@ -4866,7 +6924,7 @@ function Dashboard({
                 </h2>
 
                 <p>
-                  Connected to FastAPI + MySQL + ML
+                  Connected to FastAPI + TiDB/MySQL + ML
                 </p>
 
               </div>
@@ -4879,22 +6937,25 @@ function Dashboard({
               {
                 suggestions.map(
                   (
-                    suggestion
+                    [
+                      label,
+                      question,
+                    ]
                   ) => (
 
                     <button
                       type="button"
                       key={
-                        suggestion.label
+                        label
                       }
                       onClick={() =>
                         sendAiMessage(
-                          suggestion.question
+                          question
                         )
                       }
                     >
                       {
-                        suggestion.label
+                        label
                       }
                     </button>
 
@@ -4915,7 +6976,9 @@ function Dashboard({
                   ) => (
 
                     <div
-                      key={index}
+                      key={
+                        index
+                      }
                       className={
                         message.role ===
                         "user"
@@ -4925,16 +6988,13 @@ function Dashboard({
                     >
 
                       <div className="chat-avatar">
-
                         {
                           message.role ===
                           "user"
                             ? "👤"
                             : "🤖"
                         }
-
                       </div>
-
 
                       <div className="chat-bubble">
                         {
@@ -4964,6 +7024,7 @@ function Dashboard({
                     </div>
 
                   </div>
+
                 )
               }
 
@@ -5017,13 +7078,11 @@ function Dashboard({
                   !chatInput.trim()
                 }
               >
-
                 {
                   chatLoading
                     ? "Thinking..."
                     : "Send ➜"
                 }
-
               </button>
 
             </div>
@@ -5048,13 +7107,29 @@ function Dashboard({
     };
 
 
-  /* =====================================================
-     MAIN LAYOUT
-  ===================================================== */
-
   return (
 
-    <div className="dashboard-page">
+    <div
+      className={
+        `dashboard-page premium-shell ${
+          theme ===
+          "dark"
+            ? "theme-dark"
+            : "theme-light"
+        } ${
+          sidebarCollapsed
+            ? "sidebar-collapsed"
+            : ""
+        }`
+      }
+    >
+
+      <style>
+        {
+          PREMIUM_STYLES
+        }
+      </style>
+
 
       <aside className="sidebar">
 
@@ -5064,7 +7139,7 @@ function Dashboard({
             AI
           </div>
 
-          <div>
+          <div className="sidebar-brand-copy">
 
             <h2>
               Enterprise AI
@@ -5088,22 +7163,22 @@ function Dashboard({
                 ? "nav-item active"
                 : "nav-item"
             }
-            onClick={
-              async () => {
-
-                setPage(
-                  "dashboard"
-                );
-
-                await refreshDashboard();
-
-                await fetchAlerts(
-                  false
-                );
-              }
+            onClick={() =>
+              setPage(
+                "dashboard"
+              )
             }
+            title="Dashboard"
           >
-            📊 Dashboard
+
+            <span className="nav-icon">
+              📊
+            </span>
+
+            <span className="nav-label">
+              Dashboard
+            </span>
+
           </button>
 
 
@@ -5114,11 +7189,22 @@ function Dashboard({
                 ? "nav-item active"
                 : "nav-item"
             }
-            onClick={
-              fetchSales
+            onClick={() =>
+              fetchSalesData(
+                true
+              )
             }
+            title="Sales"
           >
-            💰 Sales
+
+            <span className="nav-icon">
+              💰
+            </span>
+
+            <span className="nav-label">
+              Sales
+            </span>
+
           </button>
 
 
@@ -5129,11 +7215,22 @@ function Dashboard({
                 ? "nav-item active"
                 : "nav-item"
             }
-            onClick={
-              fetchCustomers
+            onClick={() =>
+              fetchCustomersData(
+                true
+              )
             }
+            title="Customers"
           >
-            👥 Customers
+
+            <span className="nav-icon">
+              👥
+            </span>
+
+            <span className="nav-label">
+              Customers
+            </span>
+
           </button>
 
 
@@ -5147,8 +7244,17 @@ function Dashboard({
             onClick={
               openAnalytics
             }
+            title="Analytics"
           >
-            📈 Analytics
+
+            <span className="nav-icon">
+              📈
+            </span>
+
+            <span className="nav-label">
+              Analytics
+            </span>
+
           </button>
 
 
@@ -5164,8 +7270,17 @@ function Dashboard({
                 true
               )
             }
+            title="AI Alerts"
           >
-            🚨 AI Alerts
+
+            <span className="nav-icon">
+              🚨
+            </span>
+
+            <span className="nav-label">
+              AI Alerts
+            </span>
+
           </button>
 
 
@@ -5181,8 +7296,17 @@ function Dashboard({
                 "copilot"
               )
             }
+            title="AI Copilot"
           >
-            🤖 AI Copilot
+
+            <span className="nav-icon">
+              🤖
+            </span>
+
+            <span className="nav-label">
+              AI Copilot
+            </span>
+
           </button>
 
         </nav>
@@ -5193,8 +7317,17 @@ function Dashboard({
           onClick={
             onLogout
           }
+          title="Logout"
         >
-          🚪 Logout
+
+          <span className="nav-icon">
+            🚪
+          </span>
+
+          <span className="logout-label">
+            Logout
+          </span>
+
         </button>
 
       </aside>
@@ -5208,13 +7341,11 @@ function Dashboard({
           renderDashboard()
         }
 
-
         {
           page ===
             "customers" &&
           renderCustomers()
         }
-
 
         {
           page ===
@@ -5222,20 +7353,17 @@ function Dashboard({
           renderSales()
         }
 
-
         {
           page ===
             "analytics" &&
           renderAnalytics()
         }
 
-
         {
           page ===
             "alerts" &&
           renderAlerts()
         }
-
 
         {
           page ===
@@ -5249,5 +7377,924 @@ function Dashboard({
   );
 }
 
+
+const PREMIUM_STYLES = `
+  .premium-shell {
+    --p-bg:#f5f7fb;
+    --p-surface:#ffffff;
+    --p-soft:#f8fafc;
+    --p-border:#e5e7eb;
+    --p-text:#111827;
+    --p-muted:#64748b;
+    --p-primary:#4f46e5;
+    --p-shadow:0 10px 30px rgba(15,23,42,.06);
+
+    background:var(--p-bg);
+    color:var(--p-text);
+  }
+
+  .premium-shell.theme-dark {
+    --p-bg:#080d17;
+    --p-surface:#111827;
+    --p-soft:#0f172a;
+    --p-border:#263247;
+    --p-text:#f8fafc;
+    --p-muted:#94a3b8;
+    --p-primary:#818cf8;
+    --p-shadow:0 16px 40px rgba(0,0,0,.25);
+  }
+
+  .premium-shell .dashboard-main {
+    width:calc(100% - 260px)!important;
+    max-width:none!important;
+    margin-left:260px!important;
+    padding:28px 32px 42px!important;
+    background:var(--p-bg)!important;
+    color:var(--p-text)!important;
+    transition:.25s ease;
+  }
+
+  .premium-shell.sidebar-collapsed .sidebar {
+    width:82px;
+    padding-left:12px;
+    padding-right:12px;
+  }
+
+  .premium-shell.sidebar-collapsed .dashboard-main {
+    width:calc(100% - 82px)!important;
+    margin-left:82px!important;
+  }
+
+  .premium-shell.sidebar-collapsed .sidebar-brand-copy,
+  .premium-shell.sidebar-collapsed .nav-label,
+  .premium-shell.sidebar-collapsed .logout-label {
+    display:none;
+  }
+
+  .premium-shell.sidebar-collapsed .sidebar-brand,
+  .premium-shell.sidebar-collapsed .nav-item,
+  .premium-shell.sidebar-collapsed .logout-btn {
+    justify-content:center;
+  }
+
+  .premium-shell .nav-item,
+  .premium-shell .logout-btn {
+    display:flex;
+    align-items:center;
+    gap:10px;
+  }
+
+  .premium-shell .nav-icon {
+    width:20px;
+    flex:0 0 20px;
+    text-align:center;
+  }
+
+  .premium-shell.theme-dark .analytics-card,
+  .premium-shell.theme-dark .copilot-card,
+  .premium-shell.theme-dark .form-card,
+  .premium-shell.theme-dark .table-card,
+  .premium-shell.theme-dark .forecast-section,
+  .premium-shell.theme-dark .all-alerts-section,
+  .premium-shell.theme-dark .business-health-section,
+  .premium-shell.theme-dark .connection-status,
+  .premium-shell.theme-dark .kpi-card,
+  .premium-shell.theme-dark .risk-metric,
+  .premium-shell.theme-dark .business-alert-card,
+  .premium-shell.theme-dark .mini-alert-card,
+  .premium-shell.theme-dark .alert-summary-grid>div {
+    background:var(--p-surface)!important;
+    color:var(--p-text)!important;
+    border-color:var(--p-border)!important;
+  }
+
+  .premium-shell.theme-dark h1,
+  .premium-shell.theme-dark h2,
+  .premium-shell.theme-dark h3,
+  .premium-shell.theme-dark h4,
+  .premium-shell.theme-dark strong,
+  .premium-shell.theme-dark td {
+    color:var(--p-text)!important;
+  }
+
+  .premium-shell.theme-dark p,
+  .premium-shell.theme-dark small,
+  .premium-shell.theme-dark .dashboard-header p,
+  .premium-shell.theme-dark .card-header p,
+  .premium-shell.theme-dark .overview-content span,
+  .premium-shell.theme-dark .connection-status {
+    color:var(--p-muted)!important;
+  }
+
+  .premium-shell.theme-dark th {
+    background:#0b1220!important;
+    color:#94a3b8!important;
+  }
+
+  .premium-shell.theme-dark td,
+  .premium-shell.theme-dark th {
+    border-color:var(--p-border)!important;
+  }
+
+  .premium-shell.theme-dark tbody tr:hover {
+    background:#0c1525!important;
+  }
+
+  .premium-shell.theme-dark .overview-content div,
+  .premium-shell.theme-dark .recommendation-box,
+  .premium-shell.theme-dark .copilot-messages,
+  .premium-shell.theme-dark .copilot-suggestions,
+  .premium-shell.theme-dark .table-card-heading {
+    background:var(--p-soft)!important;
+  }
+
+  .premium-shell.theme-dark input,
+  .premium-shell.theme-dark select,
+  .premium-shell.theme-dark textarea {
+    background:#0b1220!important;
+    color:#f8fafc!important;
+    border-color:#334155!important;
+    -webkit-text-fill-color:#f8fafc!important;
+  }
+
+  .premium-shell.theme-dark input::placeholder {
+    color:#64748b!important;
+    -webkit-text-fill-color:#64748b!important;
+  }
+
+  .premium-dashboard-header {
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap:18px;
+    margin-bottom:18px;
+  }
+
+  .premium-heading-row,
+  .premium-header-actions {
+    display:flex;
+    align-items:center;
+    gap:11px;
+  }
+
+  .premium-heading-row h1 {
+    color:var(--p-text);
+  }
+
+  .premium-heading-row p {
+    margin-top:6px;
+    color:var(--p-muted);
+  }
+
+  .premium-icon-button {
+    width:40px;
+    height:40px;
+    display:grid;
+    place-items:center;
+    border:1px solid var(--p-border);
+    border-radius:11px;
+    background:var(--p-surface);
+    color:var(--p-text);
+    box-shadow:var(--p-shadow);
+  }
+
+  .premium-notification-wrap {
+    position:relative;
+  }
+
+  .premium-notification-count {
+    position:absolute;
+    right:-5px;
+    top:-6px;
+    min-width:18px;
+    height:18px;
+    padding:0 4px;
+    display:grid;
+    place-items:center;
+    border-radius:999px;
+    background:#ef4444;
+    color:white;
+    font-size:10px;
+    font-weight:900;
+  }
+
+  .premium-notification-popover {
+    position:absolute;
+    right:0;
+    top:48px;
+    z-index:3000;
+    width:min(370px,85vw);
+    padding:14px;
+    border:1px solid var(--p-border);
+    border-radius:15px;
+    background:var(--p-surface);
+    box-shadow:0 20px 55px rgba(15,23,42,.22);
+  }
+
+  .premium-notification-popover h4 {
+    margin-bottom:8px;
+  }
+
+  .notification-row {
+    width:100%;
+    display:grid;
+    grid-template-columns:28px 1fr;
+    gap:8px;
+    padding:10px 3px;
+    border:0;
+    border-top:1px solid var(--p-border);
+    background:transparent;
+    text-align:left;
+    color:var(--p-text);
+  }
+
+  .notification-row p {
+    margin-top:3px;
+    color:var(--p-muted);
+    font-size:12px;
+    line-height:1.4;
+  }
+
+  .premium-filter-bar {
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap:12px;
+    flex-wrap:wrap;
+    margin-bottom:18px;
+  }
+
+  .premium-range-buttons {
+    display:flex;
+    gap:7px;
+    padding:5px;
+    border:1px solid var(--p-border);
+    border-radius:12px;
+    background:var(--p-surface);
+  }
+
+  .premium-range-buttons button {
+    border:0;
+    border-radius:8px;
+    padding:8px 13px;
+    background:transparent;
+    color:var(--p-muted);
+    font-size:12px;
+    font-weight:800;
+  }
+
+  .premium-range-buttons button.active {
+    background:var(--p-primary);
+    color:white;
+    box-shadow:0 6px 18px rgba(79,70,229,.2);
+  }
+
+  .premium-export-button {
+    border:0;
+    border-radius:10px;
+    padding:10px 14px;
+    background:#2563eb;
+    color:white;
+    font-weight:800;
+  }
+
+  .premium-kpi-grid {
+    display:grid;
+    grid-template-columns:repeat(4,minmax(0,1fr));
+    gap:15px;
+    margin-bottom:18px;
+  }
+
+  .premium-kpi-card {
+    position:relative;
+    overflow:hidden;
+    min-height:130px;
+    display:flex;
+    align-items:center;
+    gap:14px;
+    padding:19px;
+    border:1px solid var(--p-border);
+    border-radius:16px;
+    background:var(--p-surface);
+    box-shadow:var(--p-shadow);
+  }
+
+  .premium-kpi-card::after {
+    content:"";
+    position:absolute;
+    left:0;
+    top:0;
+    bottom:0;
+    width:3px;
+    background:var(--accent,#4f46e5);
+  }
+
+  .premium-kpi-icon {
+    width:50px;
+    height:50px;
+    flex:0 0 50px;
+    display:grid;
+    place-items:center;
+    border-radius:13px;
+    background:var(--icon-bg,#eef2ff);
+    font-size:22px;
+  }
+
+  .premium-kpi-card p {
+    color:var(--p-muted);
+    font-size:12px;
+    font-weight:700;
+  }
+
+  .premium-kpi-card h2 {
+    margin:5px 0 6px;
+    color:var(--p-text);
+    font-size:clamp(18px,1.5vw,24px);
+    overflow-wrap:anywhere;
+  }
+
+  .premium-kpi-card span {
+    font-size:11px;
+    font-weight:800;
+  }
+
+  .trend-up {
+    color:#059669!important;
+  }
+
+  .trend-down {
+    color:#dc2626!important;
+  }
+
+  .trend-neutral {
+    color:var(--p-muted)!important;
+  }
+
+  .premium-main-grid {
+    display:grid;
+    grid-template-columns:minmax(0,2.1fr) minmax(300px,.9fr);
+    gap:16px;
+    margin-bottom:16px;
+  }
+
+  .premium-secondary-grid {
+    display:grid;
+    grid-template-columns:repeat(2,minmax(0,1fr));
+    gap:16px;
+    margin-bottom:16px;
+  }
+
+  .premium-card {
+    border:1px solid var(--p-border);
+    border-radius:17px;
+    background:var(--p-surface);
+    box-shadow:var(--p-shadow);
+    overflow:hidden;
+  }
+
+  .premium-card-header {
+    display:flex;
+    align-items:flex-start;
+    justify-content:space-between;
+    gap:12px;
+    padding:18px 19px 8px;
+  }
+
+  .premium-card-header h2 {
+    color:var(--p-text);
+    font-size:18px;
+  }
+
+  .premium-card-header p {
+    margin-top:4px;
+    color:var(--p-muted);
+    font-size:12px;
+  }
+
+  .premium-badge {
+    padding:6px 9px;
+    border-radius:999px;
+    background:rgba(99,102,241,.1);
+    color:var(--p-primary);
+    font-size:10px;
+    font-weight:900;
+  }
+
+  .premium-link-button {
+    border:0;
+    background:transparent;
+    color:var(--p-primary);
+    font-weight:800;
+  }
+
+  .premium-revenue-chart-wrap {
+    width:100%;
+    overflow-x:auto;
+    padding:6px 10px 2px;
+  }
+
+  .premium-revenue-chart {
+    display:block;
+    width:100%;
+    min-width:580px;
+    height:300px;
+  }
+
+  .premium-chart-grid {
+    stroke:var(--p-border);
+    stroke-width:1;
+  }
+
+  .premium-chart-line {
+    fill:none;
+    stroke:#6366f1;
+    stroke-width:3.5;
+    stroke-linecap:round;
+    stroke-linejoin:round;
+  }
+
+  .premium-chart-point {
+    fill:#6366f1;
+    stroke:var(--p-surface);
+    stroke-width:2.5;
+  }
+
+  .premium-chart-text {
+    fill:var(--p-muted);
+    font-size:11px;
+  }
+
+  .premium-empty-chart {
+    min-height:270px;
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    justify-content:center;
+    gap:7px;
+    color:var(--p-muted);
+  }
+
+  .premium-empty-chart span {
+    font-size:34px;
+  }
+
+  .health-ring-wrap {
+    padding:18px;
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+  }
+
+  .health-ring {
+    width:160px;
+    height:160px;
+    display:grid;
+    place-items:center;
+    border-radius:50%;
+    background:conic-gradient(
+      #22c55e var(--score),
+      var(--p-border) 0
+    );
+    position:relative;
+  }
+
+  .health-ring::after {
+    content:"";
+    position:absolute;
+    inset:14px;
+    border-radius:50%;
+    background:var(--p-surface);
+  }
+
+  .health-ring-content {
+    position:relative;
+    z-index:2;
+    text-align:center;
+  }
+
+  .health-ring-content strong {
+    display:block;
+    font-size:34px;
+    color:var(--p-text);
+  }
+
+  .health-ring-content small {
+    color:var(--p-muted);
+  }
+
+  .health-ring-status {
+    margin-top:13px;
+    text-align:center;
+  }
+
+  .health-ring-status h3 {
+    color:var(--p-text);
+    margin-bottom:5px;
+  }
+
+  .health-ring-status p {
+    color:var(--p-muted);
+    font-size:12px;
+  }
+
+  .product-grid {
+    display:grid;
+    grid-template-columns:repeat(2,minmax(0,1fr));
+    gap:12px;
+    padding:8px 16px 18px;
+  }
+
+  .product-card {
+    display:grid;
+    grid-template-columns:105px 1fr;
+    min-height:118px;
+    overflow:hidden;
+    border:1px solid var(--p-border);
+    border-radius:13px;
+    background:var(--p-soft);
+  }
+
+  .product-card img {
+    width:105px;
+    height:100%;
+    min-height:118px;
+    object-fit:cover;
+  }
+
+  .product-card-body {
+    padding:12px;
+    display:flex;
+    flex-direction:column;
+    justify-content:center;
+  }
+
+  .product-card-body>span {
+    color:var(--p-muted);
+    font-size:10px;
+    font-weight:800;
+    text-transform:uppercase;
+  }
+
+  .product-card-body h3 {
+    margin:3px 0 5px;
+    color:var(--p-text);
+    font-size:14px;
+  }
+
+  .product-card-body strong {
+    color:var(--p-primary);
+  }
+
+  .product-card-body small {
+    margin-top:3px;
+    color:var(--p-muted);
+  }
+
+  .category-mix-wrap {
+    min-height:285px;
+    display:grid;
+    grid-template-columns:190px 1fr;
+    align-items:center;
+    gap:16px;
+    padding:12px 18px 20px;
+  }
+
+  .category-donut {
+    width:175px;
+    height:175px;
+    display:grid;
+    place-items:center;
+    border-radius:50%;
+  }
+
+  .category-donut-center {
+    width:108px;
+    height:108px;
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    justify-content:center;
+    border-radius:50%;
+    background:var(--p-surface);
+    text-align:center;
+  }
+
+  .category-donut-center strong {
+    color:var(--p-text);
+    font-size:14px;
+  }
+
+  .category-donut-center span {
+    margin-top:4px;
+    color:var(--p-muted);
+    font-size:10px;
+  }
+
+  .category-legend>div {
+    display:grid;
+    grid-template-columns:10px 1fr auto;
+    align-items:center;
+    gap:8px;
+    padding:7px 0;
+    border-bottom:1px solid var(--p-border);
+  }
+
+  .category-legend span {
+    color:var(--p-muted);
+    font-size:12px;
+  }
+
+  .category-legend strong {
+    color:var(--p-text);
+    font-size:12px;
+  }
+
+  .category-dot {
+    width:8px;
+    height:8px;
+    border-radius:50%;
+  }
+
+  .category-dot-0 {
+    background:#4f46e5;
+  }
+
+  .category-dot-1 {
+    background:#06b6d4;
+  }
+
+  .category-dot-2 {
+    background:#22c55e;
+  }
+
+  .category-dot-3 {
+    background:#f59e0b;
+  }
+
+  .category-dot-4 {
+    background:#ef4444;
+  }
+
+  .recent-list,
+  .premium-alert-list {
+    padding:6px 15px 16px;
+  }
+
+  .recent-row {
+    display:grid;
+    grid-template-columns:36px 1fr auto;
+    align-items:center;
+    gap:10px;
+    padding:11px 2px;
+    border-top:1px solid var(--p-border);
+  }
+
+  .recent-row:first-child,
+  .premium-alert-row:first-child {
+    border-top:0;
+  }
+
+  .recent-icon {
+    width:34px;
+    height:34px;
+    display:grid;
+    place-items:center;
+    border-radius:10px;
+    background:var(--p-soft);
+  }
+
+  .recent-row strong,
+  .premium-alert-row strong {
+    color:var(--p-text);
+    font-size:13px;
+  }
+
+  .recent-row p,
+  .premium-alert-row p {
+    margin-top:3px;
+    color:var(--p-muted);
+    font-size:11px;
+    line-height:1.4;
+  }
+
+  .recent-row small,
+  .premium-alert-row small {
+    color:var(--p-muted);
+    font-size:10px;
+  }
+
+  .premium-alert-row {
+    display:grid;
+    grid-template-columns:28px 1fr auto;
+    gap:9px;
+    align-items:start;
+    padding:11px 3px;
+    border-top:1px solid var(--p-border);
+  }
+
+  .premium-ai-banner {
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap:18px;
+    margin-bottom:16px;
+    padding:22px 24px;
+    border-radius:17px;
+    background:
+      linear-gradient(
+        135deg,
+        #111827,
+        #312e81
+      );
+    color:white;
+    box-shadow:
+      0 16px 34px
+      rgba(
+        15,
+        23,
+        42,
+        .16
+      );
+  }
+
+  .premium-ai-banner span {
+    color:#c4b5fd;
+    font-size:10px;
+    font-weight:900;
+    letter-spacing:1.2px;
+  }
+
+  .premium-ai-banner h2 {
+    margin:5px 0;
+    color:white!important;
+  }
+
+  .premium-ai-banner p {
+    color:#cbd5e1!important;
+  }
+
+  .premium-ai-banner button {
+    border:
+      1px solid
+      rgba(
+        255,
+        255,
+        255,
+        .16
+      );
+    border-radius:11px;
+    padding:11px 15px;
+    background:
+      rgba(
+        255,
+        255,
+        255,
+        .08
+      );
+    color:white;
+    font-weight:800;
+  }
+
+  .premium-empty-block {
+    grid-column:1/-1;
+    padding:30px 18px;
+    color:var(--p-muted);
+    text-align:center;
+  }
+
+  .premium-muted {
+    color:var(--p-muted);
+  }
+
+  .premium-shell .form-grid input,
+  .premium-shell .form-grid select {
+    color:#0f172a;
+    caret-color:#0f172a;
+    -webkit-text-fill-color:#0f172a;
+    background:#fff;
+  }
+
+  .premium-shell .form-grid input::placeholder {
+    color:#94a3b8;
+    -webkit-text-fill-color:#94a3b8;
+    opacity:1;
+  }
+
+  @media (
+    max-width:1200px
+  ) {
+
+    .premium-kpi-grid {
+      grid-template-columns:
+        repeat(
+          2,
+          minmax(
+            0,
+            1fr
+          )
+        );
+    }
+
+    .premium-main-grid,
+    .premium-secondary-grid {
+      grid-template-columns:1fr;
+    }
+  }
+
+  @media (
+    max-width:900px
+  ) {
+
+    .premium-shell .dashboard-main {
+      width:100%!important;
+      margin-left:0!important;
+      padding:20px!important;
+    }
+
+    .premium-shell .sidebar {
+      width:82px!important;
+    }
+
+    .premium-shell .sidebar-brand-copy,
+    .premium-shell .nav-label,
+    .premium-shell .logout-label {
+      display:none!important;
+    }
+
+    .premium-shell .sidebar {
+      transform:
+        translateX(
+          -100%
+        );
+    }
+
+    .premium-shell.sidebar-collapsed .sidebar {
+      transform:
+        translateX(
+          0
+        );
+    }
+
+    .premium-shell.sidebar-collapsed .dashboard-main {
+      margin-left:82px!important;
+      width:
+        calc(
+          100% -
+          82px
+        )!important;
+    }
+
+    .premium-dashboard-header {
+      align-items:flex-start;
+    }
+
+    .premium-header-actions {
+      flex-wrap:wrap;
+      justify-content:flex-end;
+    }
+  }
+
+  @media (
+    max-width:700px
+  ) {
+
+    .premium-kpi-grid {
+      grid-template-columns:1fr;
+    }
+
+    .premium-dashboard-header,
+    .premium-ai-banner {
+      flex-direction:column;
+      align-items:flex-start;
+    }
+
+    .premium-header-actions {
+      width:100%;
+      justify-content:flex-start;
+    }
+
+    .premium-filter-bar {
+      align-items:flex-start;
+    }
+
+    .premium-range-buttons {
+      width:100%;
+      overflow-x:auto;
+    }
+
+    .product-grid {
+      grid-template-columns:1fr;
+    }
+
+    .category-mix-wrap {
+      grid-template-columns:1fr;
+      justify-items:center;
+    }
+
+    .category-legend {
+      width:100%;
+    }
+  }
+`;
 
 export default App;

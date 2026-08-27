@@ -855,13 +855,22 @@ button {
   padding: 12px 14px;
   border: 1px solid #dbe2ea;
   border-radius: 9px;
-  background: white;
+  background: #ffffff;
+  color: #0f172a;
+  caret-color: #0f172a;
   outline: none;
+}
+
+.form-grid input::placeholder {
+  color: #94a3b8;
+  opacity: 1;
 }
 
 .form-grid input:focus,
 .form-grid select:focus {
   border-color: #6366f1;
+  background: #ffffff;
+  color: #0f172a;
   box-shadow:
     0 0 0 3px
     rgba(99, 102, 241, 0.08);
@@ -2833,4 +2842,1012 @@ tbody tr:hover {
 
 /* =====================================================
    END LAMP PULL LOGIN EXPERIENCE
+   ===================================================== */
+/* =====================================================
+   CUSTOMER + SALES FORM VISIBILITY FIX
+   ===================================================== */
+
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 2000;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  padding: 20px;
+
+  background: rgba(15, 23, 42, 0.68);
+
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+}
+
+
+.customer-modal {
+  width: 100%;
+  max-width: 520px;
+
+  max-height: calc(100vh - 40px);
+  overflow-y: auto;
+
+  padding: 28px;
+
+  border: 1px solid #e5e7eb;
+  border-radius: 18px;
+
+  background: #ffffff;
+
+  color: #0f172a;
+
+  box-shadow:
+    0 25px 70px
+    rgba(15, 23, 42, 0.28);
+}
+
+
+.modal-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+
+  gap: 16px;
+
+  margin-bottom: 20px;
+}
+
+
+.modal-header h2 {
+  color: #0f172a;
+
+  font-size: 21px;
+}
+
+
+.modal-header p {
+  margin-top: 5px;
+
+  color: #64748b;
+
+  font-size: 13px;
+}
+
+
+.close-button {
+  width: 36px;
+  height: 36px;
+
+  flex-shrink: 0;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  border: none;
+  border-radius: 9px;
+
+  background: #f1f5f9;
+
+  color: #475569;
+
+  font-size: 18px;
+
+  cursor: pointer;
+}
+
+
+.close-button:hover {
+  background: #e2e8f0;
+
+  color: #0f172a;
+}
+
+
+.customer-form {
+  display: flex;
+  flex-direction: column;
+
+  gap: 8px;
+}
+
+
+.customer-form label {
+  margin-top: 10px;
+
+  color: #334155;
+
+  font-size: 13px;
+  font-weight: 700;
+}
+
+
+.customer-form input,
+.customer-form select {
+  width: 100%;
+
+  min-height: 46px;
+
+  padding: 11px 13px;
+
+  border: 1px solid #dbe2ea;
+  border-radius: 9px;
+
+  background: #ffffff !important;
+
+  color: #0f172a !important;
+
+  -webkit-text-fill-color: #0f172a !important;
+
+  caret-color: #0f172a;
+
+  font-size: 14px;
+
+  opacity: 1;
+
+  outline: none;
+}
+
+
+.customer-form input::placeholder {
+  color: #94a3b8 !important;
+
+  -webkit-text-fill-color: #94a3b8 !important;
+
+  opacity: 1;
+}
+
+
+.customer-form input:focus,
+.customer-form select:focus {
+  border-color: #6366f1;
+
+  background: #ffffff !important;
+
+  color: #0f172a !important;
+
+  -webkit-text-fill-color: #0f172a !important;
+
+  box-shadow:
+    0 0 0 3px
+    rgba(99, 102, 241, 0.1);
+}
+
+
+.customer-form select option {
+  background: #ffffff;
+
+  color: #0f172a;
+}
+
+
+.customer-form input:-webkit-autofill,
+.customer-form input:-webkit-autofill:hover,
+.customer-form input:-webkit-autofill:focus {
+  -webkit-text-fill-color: #0f172a !important;
+
+  -webkit-box-shadow:
+    0 0 0 1000px
+    #ffffff inset !important;
+
+  transition:
+    background-color 9999s ease-in-out 0s;
+}
+
+
+.save-customer-button {
+  width: 100%;
+
+  margin-top: 18px;
+
+  padding: 13px 16px;
+
+  border: none;
+  border-radius: 10px;
+
+  background:
+    linear-gradient(
+      135deg,
+      #4f46e5,
+      #6366f1
+    );
+
+  color: #ffffff;
+
+  font-size: 14px;
+  font-weight: 800;
+
+  cursor: pointer;
+}
+
+
+.save-customer-button:hover {
+  background:
+    linear-gradient(
+      135deg,
+      #4338ca,
+      #4f46e5
+    );
+
+  transform: translateY(-1px);
+}
+
+
+/* =====================================================
+   END CUSTOMER + SALES FORM VISIBILITY FIX
+   ===================================================== */
+   /* =====================================================
+   ROOT + PREMIUM DASHBOARD FULL-WIDTH FIX
+   Dashboard width + title spacing fix
+   Lamp Login / Dark Mode / Sales / Customers untouched
+   ===================================================== */
+
+html,
+body,
+#root {
+  width: 100%;
+  min-width: 320px;
+  min-height: 100%;
+}
+
+body {
+  display: block !important;
+  place-items: initial !important;
+
+  width: 100%;
+  min-height: 100vh;
+
+  margin: 0;
+
+  overflow-x: hidden;
+}
+
+#root {
+  width: 100% !important;
+  max-width: none !important;
+
+  min-height: 100vh;
+
+  margin: 0 !important;
+  padding: 0 !important;
+
+  text-align: left !important;
+}
+
+
+/* =====================================================
+   FULL APP WIDTH
+   ===================================================== */
+
+#root .dashboard-page,
+#root .premium-shell {
+  width: 100%;
+  min-height: 100vh;
+}
+
+
+/* =====================================================
+   MAIN DASHBOARD
+   ===================================================== */
+
+#root .premium-shell .dashboard-main {
+  width: calc(100% - 260px) !important;
+
+  max-width: none !important;
+
+  min-height: 100vh;
+
+  margin-left: 260px !important;
+
+  padding:
+    32px
+    38px
+    48px !important;
+}
+
+
+/* =====================================================
+   COLLAPSED SIDEBAR
+   ===================================================== */
+
+#root
+.premium-shell.sidebar-collapsed
+.dashboard-main {
+  width: calc(100% - 82px) !important;
+
+  margin-left: 82px !important;
+}
+
+
+/* =====================================================
+   DASHBOARD HEADER
+   ===================================================== */
+
+#root
+.premium-dashboard-header {
+  width: 100%;
+
+  display: flex;
+
+  align-items: center !important;
+  justify-content: space-between;
+
+  gap: 24px !important;
+
+  margin-bottom: 24px !important;
+}
+
+
+/* =====================================================
+   DASHBOARD HEADING LEFT SIDE
+   ===================================================== */
+
+#root
+.premium-heading-row {
+  display: flex;
+
+  align-items: center;
+
+  min-width: 0;
+
+  gap: 16px !important;
+}
+
+
+#root
+.premium-heading-row > div {
+  min-width: 0;
+}
+
+
+/* =====================================================
+   BUSINESS DASHBOARD TITLE FIX
+   ===================================================== */
+
+#root
+.premium-dashboard-header
+.premium-heading-row
+h1 {
+  margin: 0 !important;
+
+  padding: 0 !important;
+
+  color: #111827;
+
+  font-size: 32px !important;
+
+  font-weight: 800 !important;
+
+  line-height: 1.15 !important;
+
+  letter-spacing:
+    -0.025em !important;
+
+  white-space: nowrap;
+}
+
+
+/* =====================================================
+   DASHBOARD WELCOME TEXT
+   ===================================================== */
+
+#root
+.premium-dashboard-header
+.premium-heading-row
+p {
+  margin-top: 7px !important;
+
+  color: #64748b;
+
+  font-size: 14px;
+
+  line-height: 1.45 !important;
+}
+
+
+/* =====================================================
+   HEADER ACTIONS
+   ===================================================== */
+
+#root
+.premium-header-actions {
+  display: flex;
+
+  align-items: center;
+
+  justify-content: flex-end;
+
+  flex-wrap: wrap;
+
+  gap: 11px;
+}
+
+
+/* =====================================================
+   FILTER SECTION
+   ===================================================== */
+
+#root
+.premium-filter-bar {
+  width: 100%;
+
+  margin-bottom: 22px;
+
+  display: flex;
+
+  align-items: center;
+
+  justify-content: space-between;
+
+  gap: 16px;
+
+  flex-wrap: wrap;
+}
+
+
+/* =====================================================
+   KPI GRID FULL WIDTH
+   ===================================================== */
+
+#root
+.premium-kpi-grid {
+  width: 100%;
+
+  display: grid;
+
+  grid-template-columns:
+    repeat(
+      4,
+      minmax(0, 1fr)
+    );
+
+  gap: 18px;
+
+  margin-bottom: 20px;
+}
+
+
+/* =====================================================
+   KPI CARD
+   ===================================================== */
+
+#root
+.premium-kpi-card {
+  width: 100%;
+
+  min-width: 0;
+
+  min-height: 135px;
+
+  padding: 20px;
+
+  gap: 16px;
+}
+
+
+#root
+.premium-kpi-card h2 {
+  font-size: 22px;
+
+  line-height: 1.25;
+
+  overflow-wrap: anywhere;
+}
+
+
+/* =====================================================
+   MAIN REVENUE + HEALTH GRID
+   ===================================================== */
+
+#root
+.premium-main-grid {
+  width: 100%;
+
+  display: grid;
+
+  grid-template-columns:
+    minmax(0, 2.15fr)
+    minmax(320px, 0.85fr);
+
+  gap: 20px;
+
+  margin-bottom: 20px;
+}
+
+
+/* =====================================================
+   SECONDARY GRID
+   ===================================================== */
+
+#root
+.premium-secondary-grid {
+  width: 100%;
+
+  display: grid;
+
+  grid-template-columns:
+    repeat(
+      2,
+      minmax(0, 1fr)
+    );
+
+  gap: 20px;
+
+  margin-bottom: 20px;
+}
+
+
+/* =====================================================
+   PREMIUM CARDS
+   ===================================================== */
+
+#root
+.premium-card {
+  width: 100%;
+
+  min-width: 0;
+}
+
+
+/* =====================================================
+   REVENUE CHART SPACE
+   ===================================================== */
+
+#root
+.premium-revenue-chart-wrap {
+  width: 100%;
+
+  padding:
+    12px
+    18px
+    10px;
+}
+
+
+#root
+.premium-revenue-chart {
+  width: 100%;
+
+  min-width: 650px;
+
+  height: 330px;
+}
+
+
+/* =====================================================
+   PRODUCT GRID
+   ===================================================== */
+
+#root
+.product-grid {
+  display: grid;
+
+  grid-template-columns:
+    repeat(
+      2,
+      minmax(0, 1fr)
+    );
+
+  gap: 14px;
+
+  padding:
+    10px
+    18px
+    20px;
+}
+
+
+/* =====================================================
+   CATEGORY CHART
+   ===================================================== */
+
+#root
+.category-mix-wrap {
+  min-height: 310px;
+
+  grid-template-columns:
+    200px
+    minmax(0, 1fr);
+
+  gap: 24px;
+
+  padding:
+    18px
+    22px
+    24px;
+}
+
+
+/* =====================================================
+   RECENT ACTIVITY
+   ===================================================== */
+
+#root
+.recent-list {
+  padding:
+    10px
+    18px
+    20px;
+}
+
+
+/* =====================================================
+   ALERT LIST
+   ===================================================== */
+
+#root
+.premium-alert-list {
+  padding:
+    10px
+    18px
+    20px;
+}
+
+
+/* =====================================================
+   AI COPILOT BANNER
+   ===================================================== */
+
+#root
+.premium-ai-banner {
+  width: 100%;
+
+  margin-top: 4px;
+  margin-bottom: 20px;
+
+  padding:
+    25px
+    28px;
+}
+
+
+/* =====================================================
+   CONNECTION STATUS
+   ===================================================== */
+
+#root
+.connection-status {
+  width: 100%;
+}
+
+
+/* =====================================================
+   DARK MODE TITLE
+   ===================================================== */
+
+#root
+.theme-dark
+.premium-dashboard-header
+.premium-heading-row
+h1 {
+  color: #f8fafc !important;
+}
+
+
+/* =====================================================
+   TABLE + FORMS FULL WIDTH
+   ===================================================== */
+
+#root
+.table-card,
+#root
+.form-card,
+#root
+.forecast-section,
+#root
+.ml-section,
+#root
+.all-alerts-section {
+  width: 100%;
+}
+
+
+/* =====================================================
+   SALES + CUSTOMER INPUT TEXT
+   ===================================================== */
+
+#root
+.premium-shell
+.form-grid input,
+#root
+.premium-shell
+.form-grid select {
+  color: #0f172a;
+
+  -webkit-text-fill-color:
+    #0f172a;
+
+  caret-color: #0f172a;
+}
+
+
+#root
+.premium-shell
+.form-grid input::placeholder {
+  color: #94a3b8;
+
+  -webkit-text-fill-color:
+    #94a3b8;
+
+  opacity: 1;
+}
+
+
+/* =====================================================
+   DARK MODE FORM INPUT
+   ===================================================== */
+
+#root
+.theme-dark
+.form-grid input,
+#root
+.theme-dark
+.form-grid select {
+  background:
+    #0b1220 !important;
+
+  color:
+    #f8fafc !important;
+
+  -webkit-text-fill-color:
+    #f8fafc !important;
+
+  caret-color:
+    #f8fafc !important;
+}
+
+
+/* =====================================================
+   LARGE LAPTOP / DESKTOP
+   ===================================================== */
+
+@media (
+  min-width: 1500px
+) {
+
+  #root
+  .premium-shell
+  .dashboard-main {
+    padding:
+      34px
+      46px
+      52px !important;
+  }
+
+
+  #root
+  .premium-kpi-grid {
+    gap: 20px;
+  }
+
+
+  #root
+  .premium-main-grid {
+    gap: 22px;
+  }
+
+
+  #root
+  .premium-secondary-grid {
+    gap: 22px;
+  }
+}
+
+
+/* =====================================================
+   MEDIUM SCREEN
+   ===================================================== */
+
+@media (
+  max-width: 1200px
+) {
+
+  #root
+  .premium-kpi-grid {
+    grid-template-columns:
+      repeat(
+        2,
+        minmax(0, 1fr)
+      );
+  }
+
+
+  #root
+  .premium-main-grid {
+    grid-template-columns:
+      1fr;
+  }
+
+
+  #root
+  .premium-secondary-grid {
+    grid-template-columns:
+      1fr;
+  }
+}
+
+
+/* =====================================================
+   TABLET
+   ===================================================== */
+
+@media (
+  max-width: 900px
+) {
+
+  #root
+  .premium-shell
+  .dashboard-main {
+    width:
+      100% !important;
+
+    margin-left:
+      0 !important;
+
+    padding:
+      20px !important;
+  }
+
+
+  #root
+  .premium-shell.sidebar-collapsed
+  .dashboard-main {
+    width:
+      calc(
+        100% - 82px
+      ) !important;
+
+    margin-left:
+      82px !important;
+  }
+
+
+  #root
+  .premium-dashboard-header {
+    align-items:
+      flex-start !important;
+
+    flex-wrap:
+      wrap;
+  }
+
+
+  #root
+  .premium-dashboard-header
+  .premium-heading-row
+  h1 {
+    font-size:
+      29px !important;
+  }
+
+
+  #root
+  .premium-header-actions {
+    justify-content:
+      flex-start;
+  }
+}
+
+
+/* =====================================================
+   MOBILE
+   ===================================================== */
+
+@media (
+  max-width: 700px
+) {
+
+  #root
+  .premium-shell
+  .dashboard-main {
+    width:
+      100% !important;
+
+    margin-left:
+      0 !important;
+
+    padding:
+      16px !important;
+  }
+
+
+  #root
+  .premium-shell.sidebar-collapsed
+  .dashboard-main {
+    width:
+      calc(
+        100% - 82px
+      ) !important;
+
+    margin-left:
+      82px !important;
+  }
+
+
+  #root
+  .premium-dashboard-header {
+    flex-direction:
+      column;
+
+    gap:
+      16px !important;
+  }
+
+
+  #root
+  .premium-heading-row {
+    width:
+      100%;
+  }
+
+
+  #root
+  .premium-dashboard-header
+  .premium-heading-row
+  h1 {
+    white-space:
+      normal;
+
+    font-size:
+      25px !important;
+
+    line-height:
+      1.2 !important;
+  }
+
+
+  #root
+  .premium-header-actions {
+    width:
+      100%;
+
+    justify-content:
+      flex-start;
+  }
+
+
+  #root
+  .premium-kpi-grid {
+    grid-template-columns:
+      1fr;
+  }
+
+
+  #root
+  .product-grid {
+    grid-template-columns:
+      1fr;
+  }
+
+
+  #root
+  .category-mix-wrap {
+    grid-template-columns:
+      1fr;
+
+    justify-items:
+      center;
+  }
+
+
+  #root
+  .category-legend {
+    width:
+      100%;
+  }
+
+
+  #root
+  .premium-ai-banner {
+    flex-direction:
+      column;
+
+    align-items:
+      flex-start;
+  }
+}
+
+
+/* =====================================================
+   END ROOT + PREMIUM DASHBOARD FULL-WIDTH FIX
    ===================================================== */
