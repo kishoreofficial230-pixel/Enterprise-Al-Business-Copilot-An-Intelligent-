@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import "./App.css";
 
 const API_URL =
@@ -2403,26 +2403,30 @@ function Dashboard({
       false
     );
 
+  const [saleForm, setSaleForm] = useState({
+    product_name: "",
+    hsn_code: "",
+    category: "",
+    quantity: 1,
+    unit_price: "",
+    customer_name: "",
+    customer_phone: "",
+    customer_address: "",
+    gstin: "",
+    gst_percent: 18,
+    tax_type: "CGST_SGST",
+    sale_date: new Date().toISOString().slice(0, 10),
+  });
+
+  const saleSubmitLock =
+    useRef(false);
+
   const [
-    saleForm,
-    setSaleForm,
+    saleSaving,
+    setSaleSaving,
   ] =
-    useState({
-      product_name:
-        "",
+    useState(false);
 
-      category:
-        "",
-
-      quantity:
-        1,
-
-      amount:
-        "",
-
-      customer_name:
-        "",
-    });
 
 
   const [
@@ -3117,108 +3121,154 @@ function Dashboard({
     };
 
 
-  const addSale =
-    async (
-      event
-    ) => {
+  const addSale = async (event) => {
+    event.preventDefault();
 
-      event.preventDefault();
+    if (
+      saleSubmitLock.current
+    ) {
+      return;
+    }
 
-      try {
+    saleSubmitLock.current =
+      true;
 
-        const response =
-          await authFetch(
-            "/sales/",
-            {
-              method:
-                "POST",
+    setSaleSaving(
+      true
+    );
 
-              headers: {
-                "Content-Type":
-                  "application/json",
-              },
+    try {
+      const response = await authFetch("/sales/", {
+        method: "POST",
 
-              body:
-                JSON.stringify({
-                  product_name:
-                    saleForm.product_name,
+        headers: {
+          "Content-Type": "application/json",
+        },
 
-                  category:
-                    saleForm.category,
-
-                  quantity:
-                    Number(
-                      saleForm.quantity
-                    ),
-
-                  amount:
-                    Number(
-                      saleForm.amount
-                    ),
-
-                  customer_name:
-                    saleForm.customer_name,
-                }),
-            }
-          );
-
-        const data =
-          await response.json();
-
-        if (
-          !response.ok
-        ) {
-
-          alert(
-            data.detail ||
-            "Unable to add sale"
-          );
-
-          return;
-        }
-
-        setSaleForm({
+        body: JSON.stringify({
           product_name:
-            "",
+            saleForm.product_name.trim(),
+
+          hsn_code:
+            saleForm.hsn_code.trim() ||
+            null,
 
           category:
-            "",
+            saleForm.category.trim() ||
+            null,
 
           quantity:
-            1,
+            Number(
+              saleForm.quantity
+            ),
 
-          amount:
-            "",
+          unit_price:
+            Number(
+              saleForm.unit_price
+            ),
 
           customer_name:
-            "",
-        });
+            saleForm.customer_name.trim() ||
+            null,
 
-        setShowAddSale(
-          false
+          customer_phone:
+            saleForm.customer_phone.trim() ||
+            null,
+
+          customer_address:
+            saleForm.customer_address.trim() ||
+            null,
+
+          gstin:
+            saleForm.gstin
+              .trim()
+              .toUpperCase() ||
+            null,
+
+          gst_percent:
+            Number(
+              saleForm.gst_percent
+            ),
+
+          tax_type:
+            saleForm.tax_type,
+
+          sale_date:
+            saleForm.sale_date
+              ? `${saleForm.sale_date}T12:00:00`
+              : null,
+        }),
+      });
+
+      const data =
+        await response.json();
+
+      if (!response.ok) {
+        alert(
+          data.detail ||
+          "Unable to add sale"
         );
 
-        await Promise.all([
-          fetchSalesData(
-            false
-          ),
-
-          refreshDashboard(),
-
-          fetchAlerts(
-            false
-          ),
-        ]);
-
-      } catch (
-        error
-      ) {
-
-        console.error(
-          error
-        );
+        return;
       }
-    };
+
+      setSaleForm({
+        product_name: "",
+        hsn_code: "",
+        category: "",
+        quantity: 1,
+        unit_price: "",
+        customer_name: "",
+        customer_phone: "",
+        customer_address: "",
+        gstin: "",
+        gst_percent: 18,
+        tax_type: "CGST_SGST",
+        sale_date:
+          new Date()
+            .toISOString()
+            .slice(
+              0,
+              10
+            ),
+      });
+
+      setShowAddSale(
+        false
+      );
+
+      await Promise.all([
+        fetchSalesData(
+          false
+        ),
+
+        refreshDashboard(),
+
+        fetchAlerts(
+          false
+        ),
+      ]);
+
+    } catch (error) {
+
+      console.error(
+        error
+      );
+
+      alert(
+        "Unable to save sale. Please check the backend and try again."
+      );
+
+    } finally {
+
+      saleSubmitLock.current =
+        false;
+
+      setSaleSaving(
+        false
+      );
+    }
+  };
 
 
   const deleteSale =
@@ -5194,7 +5244,7 @@ function Dashboard({
                           <tr>
 
                             <th>
-                              ID
+                              S.No
                             </th>
 
                             <th>
@@ -5231,7 +5281,8 @@ function Dashboard({
                           {
                             customers.map(
                               (
-                                customer
+                                customer,
+                                index
                               ) => (
 
                                 <tr
@@ -5241,9 +5292,8 @@ function Dashboard({
                                 >
 
                                   <td>
-                                    #
                                     {
-                                      customer.id
+                                      index + 1
                                     }
                                   </td>
 
@@ -5361,395 +5411,1545 @@ function Dashboard({
     );
 
 
-  const renderSales =
-    () => (
+  const printSaleReceipt = (sale) => {
+    const w =
+      window.open(
+        "",
+        "_blank",
+        "width=900,height=900"
+      );
 
-      <>
+    if (!w) {
+      alert(
+        "Please allow pop-ups to print the receipt."
+      );
 
-        <header className="dashboard-header">
+      return;
+    }
 
-          <div>
 
-            <h1>
-              Sales
-            </h1>
+    const safe = (value) =>
+      String(
+        value ??
+        ""
+      )
+        .replaceAll(
+          "&",
+          "&amp;"
+        )
+        .replaceAll(
+          "<",
+          "&lt;"
+        )
+        .replaceAll(
+          ">",
+          "&gt;"
+        )
+        .replaceAll(
+          '"',
+          "&quot;"
+        )
+        .replaceAll(
+          "'",
+          "&#039;"
+        );
 
-            <p>
-              Manage sales and revenue records
-            </p>
 
-          </div>
+    const qty =
+      Number(
+        sale.quantity ||
+        0
+      );
 
-          <div className="header-actions">
 
-            <button
-              className="primary-button"
-              onClick={() =>
-                setShowAddSale(
-                  (
-                    value
-                  ) =>
-                    !value
-                )
+    const unit =
+      Number(
+        sale.unit_price ??
+        (
+          qty
+            ? (
+                Number(
+                  sale.taxable_amount ??
+                  sale.amount ??
+                  0
+                ) /
+                qty
+              )
+            : 0
+        )
+      );
+
+
+    const taxable =
+      Number(
+        sale.taxable_amount ??
+        (
+          sale.unit_price !=
+          null
+            ? (
+                unit *
+                qty
+              )
+            : (
+                sale.amount ??
+                0
+              )
+        )
+      );
+
+
+    const cgst =
+      Number(
+        sale.cgst ||
+        0
+      );
+
+    const sgst =
+      Number(
+        sale.sgst ||
+        0
+      );
+
+    const igst =
+      Number(
+        sale.igst ||
+        0
+      );
+
+
+    const finalAmount =
+      Number(
+        sale.final_amount ??
+        sale.amount ??
+        taxable
+      );
+
+
+    const invoice =
+      sale.invoice_number ||
+      "Legacy Sale";
+
+
+    w.document.write(`
+      <!doctype html>
+
+      <html>
+
+        <head>
+
+          <meta charset="utf-8">
+
+          <title>
+            ${safe(invoice)}
+          </title>
+
+          <style>
+
+            body {
+              font-family:
+                Arial,
+                sans-serif;
+
+              padding:
+                28px;
+
+              color:
+                #111827;
+            }
+
+            .invoice {
+              max-width:
+                800px;
+
+              margin:
+                auto;
+
+              border:
+                1px solid
+                #dddddd;
+            }
+
+            .head {
+              padding:
+                22px;
+
+              background:
+                #111827;
+
+              color:
+                white;
+
+              display:
+                flex;
+
+              justify-content:
+                space-between;
+            }
+
+            .section {
+              padding:
+                18px 22px;
+
+              border-bottom:
+                1px solid
+                #eeeeee;
+            }
+
+            .grid {
+              display:
+                grid;
+
+              grid-template-columns:
+                1fr 1fr;
+
+              gap:
+                12px;
+            }
+
+            .label {
+              font-size:
+                10px;
+
+              color:
+                #777777;
+            }
+
+            .value {
+              font-weight:
+                700;
+            }
+
+            table {
+              width:
+                100%;
+
+              border-collapse:
+                collapse;
+            }
+
+            th,
+            td {
+              padding:
+                9px;
+
+              border-bottom:
+                1px solid
+                #eeeeee;
+
+              text-align:
+                left;
+            }
+
+            .row {
+              display:
+                flex;
+
+              justify-content:
+                space-between;
+
+              padding:
+                6px 0;
+            }
+
+            .total {
+              font-size:
+                18px;
+
+              font-weight:
+                800;
+
+              border-top:
+                2px solid
+                #111827;
+
+              margin-top:
+                8px;
+
+              padding-top:
+                10px;
+            }
+
+            @media print {
+
+              body {
+                padding:
+                  0;
               }
-            >
-              + Add Sale
-            </button>
 
-            <button
-              className="refresh-button"
-              onClick={() =>
-                fetchSalesData(
-                  false
-                )
+              .invoice {
+                border:
+                  0;
               }
-            >
-              ↻ Refresh
-            </button>
+            }
 
-          </div>
+          </style>
 
-        </header>
+        </head>
 
 
-        {
-          showAddSale &&
-          (
+        <body>
 
-            <form
-              className="form-card"
-              onSubmit={
-                addSale
-              }
-            >
+          <div class="invoice">
 
-              <h2>
-                Add Sale
-              </h2>
+            <div class="head">
 
-              <div className="form-grid">
+              <div>
 
-                <input
-                  type="text"
-                  placeholder="Product Name"
-                  value={
-                    saleForm.product_name
-                  }
-                  onChange={
-                    (
-                      e
-                    ) =>
-                      setSaleForm({
-                        ...saleForm,
+                <h2 style="margin:0">
+                  Enterprise AI Business Copilot
+                </h2>
 
-                        product_name:
-                          e.target.value,
-                      })
-                  }
-                  required
-                />
-
-                <input
-                  type="text"
-                  placeholder="Category"
-                  value={
-                    saleForm.category
-                  }
-                  onChange={
-                    (
-                      e
-                    ) =>
-                      setSaleForm({
-                        ...saleForm,
-
-                        category:
-                          e.target.value,
-                      })
-                  }
-                  required
-                />
-
-                <input
-                  type="number"
-                  min="1"
-                  placeholder="Quantity"
-                  value={
-                    saleForm.quantity
-                  }
-                  onChange={
-                    (
-                      e
-                    ) =>
-                      setSaleForm({
-                        ...saleForm,
-
-                        quantity:
-                          e.target.value,
-                      })
-                  }
-                  required
-                />
-
-                <input
-                  type="number"
-                  min="0"
-                  step="0.01"
-                  placeholder="Amount"
-                  value={
-                    saleForm.amount
-                  }
-                  onChange={
-                    (
-                      e
-                    ) =>
-                      setSaleForm({
-                        ...saleForm,
-
-                        amount:
-                          e.target.value,
-                      })
-                  }
-                  required
-                />
-
-                <input
-                  type="text"
-                  placeholder="Customer Name"
-                  value={
-                    saleForm.customer_name
-                  }
-                  onChange={
-                    (
-                      e
-                    ) =>
-                      setSaleForm({
-                        ...saleForm,
-
-                        customer_name:
-                          e.target.value,
-                      })
-                  }
-                  required
-                />
+                <small>
+                  Tax Invoice / Sales Receipt
+                </small>
 
               </div>
 
-              <button
-                className="primary-button"
-                type="submit"
-              >
-                Save Sale
-              </button>
 
-            </form>
+              <div style="text-align:right">
 
-          )
-        }
+                <strong>
+                  ${safe(invoice)}
+                </strong>
+
+                <br>
+
+                <small>
+                  ${safe(
+                    dateText(
+                      sale.sale_date ||
+                      sale.created_at
+                    )
+                  )}
+                </small>
+
+              </div>
+
+            </div>
 
 
-        <div className="table-card">
+            <div class="section">
 
-          <div className="table-card-heading">
+              <h3>
+                Customer Details
+              </h3>
 
-            <h3>
-              Sales Records
-            </h3>
+              <div class="grid">
 
-            <p>
-              {
-                sales.length
-              }{" "}
-              sales found
-            </p>
+                <div>
+
+                  <div class="label">
+                    Customer
+                  </div>
+
+                  <div class="value">
+                    ${safe(
+                      sale.customer_name ||
+                      "N/A"
+                    )}
+                  </div>
+
+                </div>
+
+
+                <div>
+
+                  <div class="label">
+                    Phone
+                  </div>
+
+                  <div class="value">
+                    ${safe(
+                      sale.customer_phone ||
+                      "N/A"
+                    )}
+                  </div>
+
+                </div>
+
+
+                <div>
+
+                  <div class="label">
+                    GSTIN
+                  </div>
+
+                  <div class="value">
+                    ${safe(
+                      sale.gstin ||
+                      "N/A"
+                    )}
+                  </div>
+
+                </div>
+
+
+                <div>
+
+                  <div class="label">
+                    Address
+                  </div>
+
+                  <div class="value">
+                    ${safe(
+                      sale.customer_address ||
+                      "N/A"
+                    )}
+                  </div>
+
+                </div>
+
+              </div>
+
+            </div>
+
+
+            <div class="section">
+
+              <h3>
+                Product Details
+              </h3>
+
+              <table>
+
+                <tr>
+
+                  <th>
+                    Product
+                  </th>
+
+                  <th>
+                    HSN
+                  </th>
+
+                  <th>
+                    Category
+                  </th>
+
+                  <th>
+                    Qty
+                  </th>
+
+                  <th>
+                    Unit Price
+                  </th>
+
+                </tr>
+
+
+                <tr>
+
+                  <td>
+                    ${safe(
+                      sale.product_name ||
+                      "N/A"
+                    )}
+                  </td>
+
+                  <td>
+                    ${safe(
+                      sale.hsn_code ||
+                      "N/A"
+                    )}
+                  </td>
+
+                  <td>
+                    ${safe(
+                      sale.category ||
+                      "N/A"
+                    )}
+                  </td>
+
+                  <td>
+                    ${safe(qty)}
+                  </td>
+
+                  <td>
+                    ${safe(
+                      money(
+                        unit
+                      )
+                    )}
+                  </td>
+
+                </tr>
+
+              </table>
+
+            </div>
+
+
+            <div class="section">
+
+              <h3>
+                Tax Summary
+              </h3>
+
+
+              <div class="row">
+
+                <span>
+                  Taxable Amount
+                </span>
+
+                <strong>
+                  ${safe(
+                    money(
+                      taxable
+                    )
+                  )}
+                </strong>
+
+              </div>
+
+
+              <div class="row">
+
+                <span>
+                  GST Rate
+                </span>
+
+                <strong>
+                  ${safe(
+                    Number(
+                      sale.gst_percent ||
+                      0
+                    )
+                  )}%
+                </strong>
+
+              </div>
+
+
+              <div class="row">
+
+                <span>
+                  CGST
+                </span>
+
+                <strong>
+                  ${safe(
+                    money(
+                      cgst
+                    )
+                  )}
+                </strong>
+
+              </div>
+
+
+              <div class="row">
+
+                <span>
+                  SGST
+                </span>
+
+                <strong>
+                  ${safe(
+                    money(
+                      sgst
+                    )
+                  )}
+                </strong>
+
+              </div>
+
+
+              <div class="row">
+
+                <span>
+                  IGST
+                </span>
+
+                <strong>
+                  ${safe(
+                    money(
+                      igst
+                    )
+                  )}
+                </strong>
+
+              </div>
+
+
+              <div class="row total">
+
+                <span>
+                  Final Amount
+                </span>
+
+                <strong>
+                  ${safe(
+                    money(
+                      finalAmount
+                    )
+                  )}
+                </strong>
+
+              </div>
+
+            </div>
+
+
+            <div
+              style="
+                padding:15px;
+                text-align:center;
+                color:#777777;
+                font-size:11px;
+              "
+            >
+              Computer-generated sales receipt.
+            </div>
 
           </div>
 
+        </body>
+
+      </html>
+    `);
+
+
+    w.document.close();
+
+
+    window.setTimeout(
+      () => {
+
+        w.focus();
+
+        w.print();
+
+      },
+      250
+    );
+  };
+
+
+  const renderSales =
+    () => {
+
+      const qty =
+        Number(
+          saleForm.quantity ||
+          0
+        );
+
+      const unit =
+        Number(
+          saleForm.unit_price ||
+          0
+        );
+
+      const gstRate =
+        Number(
+          saleForm.gst_percent ||
+          0
+        );
+
+
+      const taxable =
+        qty *
+        unit;
+
+
+      const gstAmount =
+        (
+          taxable *
+          gstRate
+        ) /
+        100;
+
+
+      const cgst =
+        saleForm.tax_type ===
+        "CGST_SGST"
+          ? (
+              gstAmount /
+              2
+            )
+          : 0;
+
+
+      const sgst =
+        saleForm.tax_type ===
+        "CGST_SGST"
+          ? (
+              gstAmount /
+              2
+            )
+          : 0;
+
+
+      const igst =
+        saleForm.tax_type ===
+        "IGST"
+          ? gstAmount
+          : 0;
+
+
+      const total =
+        taxable +
+        gstAmount;
+
+
+      const update =
+        (
+          key,
+          value
+        ) =>
+
+          setSaleForm({
+            ...saleForm,
+
+            [key]:
+              value,
+          });
+
+
+      const fields = [
+
+        [
+          "Product Name *",
+          "product_name",
+          "text",
+          "Example: Laptop",
+          true,
+        ],
+
+        [
+          "HSN Code",
+          "hsn_code",
+          "text",
+          "Example: 8471",
+          false,
+        ],
+
+        [
+          "Category",
+          "category",
+          "text",
+          "Example: Electronics",
+          false,
+        ],
+
+        [
+          "Quantity *",
+          "quantity",
+          "number",
+          "1",
+          true,
+        ],
+
+        [
+          "Unit Price *",
+          "unit_price",
+          "number",
+          "Price per unit",
+          true,
+        ],
+
+        [
+          "Sale Date *",
+          "sale_date",
+          "date",
+          "",
+          true,
+        ],
+
+        [
+          "Customer Name",
+          "customer_name",
+          "text",
+          "Customer Name",
+          false,
+        ],
+
+        [
+          "Phone Number",
+          "customer_phone",
+          "tel",
+          "Customer phone",
+          false,
+        ],
+
+        [
+          "GSTIN",
+          "gstin",
+          "text",
+          "Customer GSTIN",
+          false,
+        ],
+
+        [
+          "Address",
+          "customer_address",
+          "text",
+          "Customer address",
+          false,
+        ],
+      ];
+
+
+      return (
+
+        <>
+
+          <header className="dashboard-header">
+
+            <div>
+
+              <h1>
+                Sales
+              </h1>
+
+              <p>
+                Manage GST invoices, sales and revenue records
+              </p>
+
+            </div>
+
+
+            <div className="header-actions">
+
+              <button
+                className="primary-button"
+                onClick={() =>
+                  setShowAddSale(
+                    (
+                      value
+                    ) =>
+                      !value
+                  )
+                }
+              >
+                + Add Sale
+              </button>
+
+
+              <button
+                className="refresh-button"
+                onClick={() =>
+                  fetchSalesData(
+                    false
+                  )
+                }
+              >
+                ? Refresh
+              </button>
+
+            </div>
+
+          </header>
+
 
           {
-            salesLoading
-              ? (
+            showAddSale &&
+            (
 
-                  <div className="empty-state">
+              <form
+                className="form-card"
+                onSubmit={
+                  addSale
+                }
+              >
 
-                    <div className="loading-spinner">
-                    </div>
+                <h2>
+                  Add Sale
+                </h2>
 
-                    <p>
-                      Loading sales...
-                    </p>
+
+                <p
+                  style={{
+                    marginBottom:
+                      14,
+
+                    color:
+                      "var(--p-muted)",
+                  }}
+                >
+                  Invoice number is generated automatically after saving.
+                </p>
+
+
+                <div className="form-grid">
+
+                  {
+                    fields.map(
+                      (
+                        [
+                          label,
+                          key,
+                          type,
+                          placeholder,
+                          required,
+                        ]
+                      ) => (
+
+                        <div
+                          key={
+                            key
+                          }
+                          style={{
+                            display:
+                              "flex",
+
+                            flexDirection:
+                              "column",
+
+                            gap:
+                              6,
+                          }}
+                        >
+
+                          <label
+                            style={{
+                              fontSize:
+                                12,
+
+                              fontWeight:
+                                700,
+
+                              color:
+                                "var(--p-muted)",
+                            }}
+                          >
+                            {
+                              label
+                            }
+                          </label>
+
+
+                          <input
+                            type={
+                              type
+                            }
+                            min={
+                              type ===
+                              "number"
+                                ? (
+                                    key ===
+                                    "quantity"
+                                      ? "1"
+                                      : "0"
+                                  )
+                                : undefined
+                            }
+                            step={
+                              type ===
+                              "number"
+                                ? (
+                                    key ===
+                                    "quantity"
+                                      ? "1"
+                                      : "0.01"
+                                  )
+                                : undefined
+                            }
+                            placeholder={
+                              placeholder
+                            }
+                            value={
+                              saleForm[
+                                key
+                              ]
+                            }
+                            required={
+                              required
+                            }
+                            onChange={
+                              (
+                                event
+                              ) =>
+                                update(
+                                  key,
+
+                                  key ===
+                                  "gstin"
+                                    ? event.target.value
+                                        .toUpperCase()
+                                    : event.target.value
+                                )
+                            }
+                          />
+
+                        </div>
+
+                      )
+                    )
+                  }
+
+
+                  <div
+                    style={{
+                      display:
+                        "flex",
+
+                      flexDirection:
+                        "column",
+
+                      gap:
+                        6,
+                    }}
+                  >
+
+                    <label
+                      style={{
+                        fontSize:
+                          12,
+
+                        fontWeight:
+                          700,
+
+                        color:
+                          "var(--p-muted)",
+                      }}
+                    >
+                      GST %
+                    </label>
+
+
+                    <select
+                      value={
+                        saleForm.gst_percent
+                      }
+                      onChange={
+                        (
+                          event
+                        ) =>
+                          update(
+                            "gst_percent",
+                            event.target.value
+                          )
+                      }
+                    >
+
+                      <option value="0">
+                        0%
+                      </option>
+
+                      <option value="5">
+                        5%
+                      </option>
+
+                      <option value="12">
+                        12%
+                      </option>
+
+                      <option value="18">
+                        18%
+                      </option>
+
+                      <option value="28">
+                        28%
+                      </option>
+
+                    </select>
 
                   </div>
 
-                )
-              : sales.length
-                ? (
 
-                    <div className="table-wrapper">
+                  <div
+                    style={{
+                      display:
+                        "flex",
 
-                      <table>
+                      flexDirection:
+                        "column",
 
-                        <thead>
+                      gap:
+                        6,
+                    }}
+                  >
 
-                          <tr>
+                    <label
+                      style={{
+                        fontSize:
+                          12,
 
-                            <th>
-                              ID
-                            </th>
+                        fontWeight:
+                          700,
 
-                            <th>
-                              Product
-                            </th>
-
-                            <th>
-                              Category
-                            </th>
-
-                            <th>
-                              Quantity
-                            </th>
-
-                            <th>
-                              Amount
-                            </th>
-
-                            <th>
-                              Customer
-                            </th>
-
-                            <th>
-                              Date
-                            </th>
-
-                            <th>
-                              Action
-                            </th>
-
-                          </tr>
-
-                        </thead>
+                        color:
+                          "var(--p-muted)",
+                      }}
+                    >
+                      Tax Type
+                    </label>
 
 
-                        <tbody>
+                    <select
+                      value={
+                        saleForm.tax_type
+                      }
+                      onChange={
+                        (
+                          event
+                        ) =>
+                          update(
+                            "tax_type",
+                            event.target.value
+                          )
+                      }
+                    >
 
-                          {
-                            sales.map(
-                              (
-                                sale
-                              ) => (
+                      <option value="CGST_SGST">
+                        CGST + SGST
+                      </option>
 
-                                <tr
-                                  key={
-                                    sale.id
-                                  }
-                                >
+                      <option value="IGST">
+                        IGST
+                      </option>
 
-                                  <td>
-                                    #
-                                    {
-                                      sale.id
-                                    }
-                                  </td>
+                    </select>
 
-                                  <td>
+                  </div>
 
-                                    <strong>
-                                      {
-                                        sale.product_name
-                                      }
-                                    </strong>
+                </div>
 
-                                  </td>
 
-                                  <td>
-                                    {
-                                      sale.category ||
-                                      "N/A"
-                                    }
-                                  </td>
+                <div
+                  style={{
+                    display:
+                      "grid",
 
-                                  <td>
-                                    {
-                                      sale.quantity
-                                    }
-                                  </td>
+                    gridTemplateColumns:
+                      "repeat(auto-fit,minmax(140px,1fr))",
 
-                                  <td>
+                    gap:
+                      10,
 
-                                    <strong>
-                                      {
-                                        money(
-                                          sale.amount
-                                        )
-                                      }
-                                    </strong>
+                    margin:
+                      "16px 0",
+                  }}
+                >
 
-                                  </td>
+                  {
+                    [
+                      [
+                        "Taxable Amount",
+                        taxable,
+                      ],
 
-                                  <td>
-                                    {
-                                      sale.customer_name ||
-                                      "N/A"
-                                    }
-                                  </td>
+                      [
+                        "CGST",
+                        cgst,
+                      ],
 
-                                  <td>
-                                    {
-                                      dateText(
-                                        sale.sale_date ||
-                                        sale.created_at
-                                      )
-                                    }
-                                  </td>
+                      [
+                        "SGST",
+                        sgst,
+                      ],
 
-                                  <td>
+                      [
+                        "IGST",
+                        igst,
+                      ],
 
-                                    <button
-                                      className="delete-button"
-                                      onClick={() =>
-                                        deleteSale(
-                                          sale.id
-                                        )
-                                      }
-                                    >
-                                      Delete
-                                    </button>
+                      [
+                        "Final Amount",
+                        total,
+                      ],
+                    ].map(
+                      (
+                        [
+                          label,
+                          value,
+                        ]
+                      ) => (
 
-                                  </td>
-
-                                </tr>
-
-                              )
-                            )
+                        <div
+                          key={
+                            label
                           }
+                          style={{
+                            border:
+                              "1px solid var(--p-border)",
 
-                        </tbody>
+                            borderRadius:
+                              12,
 
-                      </table>
+                            padding:
+                              12,
 
-                    </div>
+                            background:
+                              "var(--p-soft)",
+                          }}
+                        >
 
-                  )
-                : (
+                          <small>
+                            {
+                              label
+                            }
+                          </small>
+
+
+                          <strong
+                            style={{
+                              display:
+                                "block",
+
+                              marginTop:
+                                5,
+                            }}
+                          >
+                            {
+                              money(
+                                value
+                              )
+                            }
+                          </strong>
+
+                        </div>
+
+                      )
+                    )
+                  }
+
+                </div>
+
+
+                <button
+                  className="primary-button"
+                  type="submit"
+                  disabled={
+                    saleSaving
+                  }
+                >
+                  {
+                    saleSaving
+                      ? "Saving..."
+                      : "Save Sale & Generate Invoice"
+                  }
+                </button>
+
+              </form>
+
+            )
+          }
+
+
+          <div className="table-card">
+
+            <div className="table-card-heading">
+
+              <h3>
+                Sales Records
+              </h3>
+
+              <p>
+                {
+                  sales.length
+                }{" "}
+                sales found
+              </p>
+
+            </div>
+
+
+            {
+              salesLoading
+                ? (
 
                     <div className="empty-state">
 
-                      <h3>
-                        No Sales Found
-                      </h3>
+                      <div className="loading-spinner">
+                      </div>
 
                       <p>
-                        Add your first sale to get started.
+                        Loading sales...
                       </p>
 
                     </div>
 
                   )
-          }
+                : sales.length
+                  ? (
 
-        </div>
+                      <div className="table-wrapper">
 
-      </>
-    );
+                        <table>
+
+                          <thead>
+
+                            <tr>
+
+                              <th>
+                                S.No
+                              </th>
+
+                              <th>
+                                Invoice
+                              </th>
+
+                              <th>
+                                Product
+                              </th>
+
+                              <th>
+                                HSN
+                              </th>
+
+                              <th>
+                                Qty
+                              </th>
+
+                              <th>
+                                Final Amount
+                              </th>
+
+                              <th>
+                                Customer
+                              </th>
+
+                              <th>
+                                Phone
+                              </th>
+
+                              <th>
+                                GST
+                              </th>
+
+                              <th>
+                                Date
+                              </th>
+
+                              <th>
+                                Action
+                              </th>
+
+                            </tr>
+
+                          </thead>
+
+
+                          <tbody>
+
+                            {
+                              sales.map(
+                                (
+                                  sale,
+                                  index
+                                ) => (
+
+                                  <tr
+                                    key={
+                                      sale.id
+                                    }
+                                  >
+
+                                    <td>
+                                      {
+                                        index +
+                                        1
+                                      }
+                                    </td>
+
+
+                                    <td>
+
+                                      <strong>
+                                        {
+                                          sale.invoice_number ||
+                                          "Legacy"
+                                        }
+                                      </strong>
+
+                                    </td>
+
+
+                                    <td>
+
+                                      <strong>
+                                        {
+                                          sale.product_name
+                                        }
+                                      </strong>
+
+                                      <div
+                                        style={{
+                                          fontSize:
+                                            11,
+
+                                          color:
+                                            "var(--p-muted)",
+                                        }}
+                                      >
+                                        {
+                                          sale.category ||
+                                          "N/A"
+                                        }
+                                      </div>
+
+                                    </td>
+
+
+                                    <td>
+                                      {
+                                        sale.hsn_code ||
+                                        "N/A"
+                                      }
+                                    </td>
+
+
+                                    <td>
+                                      {
+                                        sale.quantity
+                                      }
+                                    </td>
+
+
+                                    <td>
+
+                                      <strong>
+                                        {
+                                          money(
+                                            sale.final_amount ??
+                                            sale.amount
+                                          )
+                                        }
+                                      </strong>
+
+                                    </td>
+
+
+                                    <td>
+
+                                      {
+                                        sale.customer_name ||
+                                        "N/A"
+                                      }
+
+
+                                      {
+                                        sale.gstin &&
+                                        (
+
+                                          <div
+                                            style={{
+                                              fontSize:
+                                                10,
+
+                                              color:
+                                                "var(--p-muted)",
+                                            }}
+                                          >
+                                            GSTIN: {
+                                              sale.gstin
+                                            }
+                                          </div>
+
+                                        )
+                                      }
+
+                                    </td>
+
+
+                                    <td>
+                                      {
+                                        sale.customer_phone ||
+                                        "N/A"
+                                      }
+                                    </td>
+
+
+                                    <td>
+                                      {
+                                        Number(
+                                          sale.gst_percent ||
+                                          0
+                                        )
+                                      }%
+                                    </td>
+
+
+                                    <td>
+                                      {
+                                        dateText(
+                                          sale.sale_date ||
+                                          sale.created_at
+                                        )
+                                      }
+                                    </td>
+
+
+                                    <td>
+
+                                      <div
+                                        style={{
+                                          display:
+                                            "flex",
+
+                                          gap:
+                                            7,
+                                        }}
+                                      >
+
+                                        <button
+                                          type="button"
+                                          className="refresh-button"
+                                          onClick={() =>
+                                            printSaleReceipt(
+                                              sale
+                                            )
+                                          }
+                                        >
+                                          Print
+                                        </button>
+
+
+                                        <button
+                                          type="button"
+                                          className="delete-button"
+                                          onClick={() =>
+                                            deleteSale(
+                                              sale.id
+                                            )
+                                          }
+                                        >
+                                          Delete
+                                        </button>
+
+                                      </div>
+
+                                    </td>
+
+                                  </tr>
+
+                                )
+                              )
+                            }
+
+                          </tbody>
+
+                        </table>
+
+                      </div>
+
+                    )
+                  : (
+
+                      <div className="empty-state">
+
+                        <h3>
+                          No Sales Found
+                        </h3>
+
+                        <p>
+                          Add your first sale to get started.
+                        </p>
+
+                      </div>
+
+                    )
+            }
+
+          </div>
+
+        </>
+
+      );
+    };
 
 
   const renderAnalytics =
